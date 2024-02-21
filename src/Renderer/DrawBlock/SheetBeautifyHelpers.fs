@@ -6,11 +6,13 @@ open DrawModelType.SymbolT
 open DrawModelType.BusWireT
 open DrawModelType.SheetT
 open SheetUpdateHelpers
+open Symbol
 open Optics
 
 
+// B1
 // Read/write the dimensions of a custom comp symbol
-let B1  =
+let customComponentDimensions_  =
     Lens.create
         (fun (sym : Symbol) ->
         (Option.defaultValue 1.0 sym.HScale) * sym.Component.W, (Option.defaultValue 1.0 sym.VScale) * sym.Component.H)
@@ -18,8 +20,9 @@ let B1  =
         let updatedComponent = { sym.Component with H = newH; W = newW }
         { sym with Component = updatedComponent })
 
+// B2
 // Write the position of a symbol on the sheet
-let B2 (offset: XYPos) (symbol: Symbol) : Symbol =
+let writeSymbolPos (offset: XYPos) (symbol: Symbol) : Symbol =
     { symbol with
         Pos = symbol.Pos + offset
         Component = { symbol.Component with
@@ -30,8 +33,9 @@ let B2 (offset: XYPos) (symbol: Symbol) : Symbol =
     }
 
 
+// B3
 // Read/write the order of ports on a specified side of a symbol
-let B3 (side: Edge) : Lens<Symbol, string list> = 
+let symbolPortOrder_ (side: Edge) : Lens<Symbol, string list> = 
     Lens.create
         (fun (symbol: Symbol) ->
             match Map.tryFind side symbol.PortMaps.Order with
@@ -44,13 +48,23 @@ let B3 (side: Edge) : Lens<Symbol, string list> =
             { symbol with PortMaps = updatedPortMaps }
         )
 
+// B4
 // Read/write the reverses state of the inputs of a MUX2
-// let B4
+let reverseInputPorts_ = 
+    Lens.create
+        (fun (symbol: Symbol) ->
+        match symbol.ReversedInputPorts with 
+        | None -> failwithf "Reversed Input Ports not found"
+        | Some value -> value
+        )
+        (fun (newReversedInputState: bool) (symbol: Symbol) ->
+            { symbol with ReversedInputPorts = Some newReversedInputState }
+        )
 
 
-
+// B5
 // Read the position of a port on the sheet. It cannot directly be written
-let B5 (symbol: Symbol) (portId: string) : Option<XYPos> =
+let getPortPosition (symbol: Symbol) (portId: string) : Option<XYPos> =
     let comp = symbol.Component
     let maybeEdge = symbol.PortMaps.Orientation |> Map.tryFind portId
     let portsOnEdge = maybeEdge |> Option.bind (fun edge -> symbol.PortMaps.Order |> Map.tryFind edge)
@@ -62,13 +76,40 @@ let B5 (symbol: Symbol) (portId: string) : Option<XYPos> =
         | Some index ->
             let gap, basePos = 
                 match edge with
-                | Top -> comp.W / float (List.length ports + 1), comp.Y + comp.H / 2.0
-                | Bottom -> comp.W / float (List.length ports + 1), comp.Y - comp.H / 2.0
-                | Left -> comp.H / float (List.length ports + 1), comp.X - comp.W / 2.0
-                | Right -> comp.H / float (List.length ports + 1), comp.X + comp.W / 2.0
+                | Top -> comp.W / float (List.length ports + 1), comp.Y
+                | Bottom -> comp.W / float (List.length ports + 1), comp.Y - comp.H
+                | Left -> comp.H / float (List.length ports + 1), comp.X
+                | Right -> comp.H / float (List.length ports + 1), comp.X + comp.W
             let offset = gap * float (index + 1)
             match edge with
-            | Top | Bottom -> Some { X = (comp.X - comp.W / 2.0) + offset; Y = basePos }
-            | Left | Right -> Some { X = basePos; Y = (comp.Y + comp.H / 2.0) - offset }
+            | Top | Bottom -> Some { X = comp.X + offset; Y = basePos }
+            | Left | Right -> Some { X = basePos; Y = comp.Y - offset }
     | _ -> None
     
+// B6
+// The Bounding box of a symbol outline (position is contained in this)
+let getBoundingBox (symbol: Symbol) = 
+    let h,w = getRotatedHAndW symbol
+    if symbol.Annotation = Some ScaleButton then 
+        {TopLeft = symbol.Pos - {X = 9.; Y = 9.}; H = 17. ; W = 17.}
+    else 
+        {TopLeft = symbol.Pos; H = float(h) ; W = float(w)}
+
+// B7
+// Read/Write The rotation state of a symbol
+let symbolRotation_ = 
+    Lens.create
+        (fun (symbol: Symbol) -> symbol.STransform.Rotation)
+        (fun (rotation: Rotation) (symbol: Symbol) -> 
+        let newSTransform = {symbol.STransform with Rotation = rotation}
+        { symbol with STransform = newSTransform })
+
+
+// B8
+// Read/Write The flip state of a symbol
+let symbolFlip_ = 
+    Lens.create
+        (fun (symbol: Symbol) -> symbol.STransform.Flipped)
+        (fun (newFlip: bool) (symbol: Symbol) -> 
+        let newSTransform = {symbol.STransform with Flipped = newFlip}
+        { symbol with STransform = newSTransform })
