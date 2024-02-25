@@ -391,6 +391,12 @@ let rotateSymbolInBlock
     } |> calcLabelBoundingBox 
 
 
+
+
+
+// bam21 Start
+// --------------------------------------------------------------------------------------------------------
+// --------------------------------------------------------------------------------------------------------
 /// <summary>HLP 23: AUTHOR Ismagilov - Flip a symbol horizontally or vertically in its block.</summary>
 /// <param name="flip">  Flip horizontally or vertically</param>
 /// <param name="block"> Bounding box of selected components</param>
@@ -403,43 +409,61 @@ let flipSymbolInBlock
 
     let h,w = getRotatedHAndW sym
     //Needed as new symbols and their components need their Pos updated (not done in regular flip symbol)
-    let newTopLeft = 
-        flipPointAboutBlockCentre sym.Pos blockCentre flip
+    
+    // Changed: add pipeline
+    let updatedTopLeft = 
+        flip 
+        |> flipPointAboutBlockCentre sym.Pos blockCentre
         |> adjustPosForBlockFlip flip h w
+    
 
-    let portOrientation = 
-        sym.PortMaps.Orientation |> Map.map (fun id side -> flipSideHorizontal side)
+    // Changed: reformat pipeline to increase readability, renamed identifier
+    let flippedPortOrientation = 
+        sym.PortMaps.Orientation 
+        |> Map.map (fun id side -> flipSideHorizontal side)
 
+    // Changed: reformat pipeline to increase readability
     let flipPortList currPortOrder side =
-        currPortOrder |> Map.add (flipSideHorizontal side ) sym.PortMaps.Order[side]
+        currPortOrder 
+        |> Map.add (flipSideHorizontal side ) sym.PortMaps.Order[side]
 
-    let portOrder = 
+    // Change: replace portOrder to simplify
+    let flippedPortOrder = 
         (Map.empty, [Edge.Top; Edge.Left; Edge.Bottom; Edge.Right]) ||> List.fold flipPortList
-        |> Map.map (fun edge order -> List.rev order)       
+        |> Map.map (fun edge order -> List.rev order)   
+  
+    // Change: RSN (Reduce Syntactic Noise) by avoiding redundancy (defining sym.STransform.Rotation as itself)
+    // and make it into one line
+    let updatedSTransform = { sym.STransform with Flipped = not sym.STransform.Flipped }
 
-    let newSTransform = 
-        {Flipped= not sym.STransform.Flipped;
-        Rotation= sym.STransform.Rotation} 
+    let updatedComponent = { sym.Component with X = updatedTopLeft.X; Y = updatedTopLeft.Y }
 
-    let newcomponent = {sym.Component with X = newTopLeft.X; Y = newTopLeft.Y}
+    // Change: Transform 3, broke pipeline because it was too long and defined variable locally. 
+    // Improves DUI principle, by giving the block of code below an identifier.
+    
+    let updatedSym = 
+        { sym with
+            Component = updatedComponent;
+            PortMaps = { Order = flippedPortOrder; Orientation = flippedPortOrientation };
+            STransform = updatedSTransform;
+            LabelHasDefaultPos = true;
+            Pos = updatedTopLeft }
+        |> calcLabelBoundingBox
 
-    { sym with
-        Component = newcomponent
-        PortMaps = {Order=portOrder;Orientation=portOrientation}
-        STransform = newSTransform
-        LabelHasDefaultPos = true
-        Pos = newTopLeft
-    }
-    |> calcLabelBoundingBox
-    |> (fun sym -> 
+    // Change: Functional abstraction, wrap code into a function and give it a proper identifier (DUI)
+    let applyFlip flip updatedSym =
         match flip with
-        | FlipHorizontal -> sym
-        | FlipVertical -> 
-            let newblock = getBlock [sym]
-            let newblockCenter = newblock.Centre()
-            sym
-            |> rotateSymbolInBlock Degree270 newblockCenter 
-            |> rotateSymbolInBlock Degree270 newblockCenter)
+        | FlipHorizontal -> 
+            updatedSym
+        | FlipVertical ->
+            let newBlock = getBlock [updatedSym]
+            let newBlockCenter = newBlock.Centre()
+            updatedSym
+            |> rotateSymbolInBlock Degree270 newBlockCenter 
+            |> rotateSymbolInBlock Degree270 newBlockCenter
+
+    applyFlip flip updatedSym
+
 
 /// <summary>HLP 23: AUTHOR Ismagilov - Scales selected symbol up or down.</summary>
 /// <param name="scaleType"> Scale up or down. Scaling distance is constant</param>
@@ -455,29 +479,39 @@ let scaleSymbolInBlock
     let symCenter = getRotatedSymbolCentre sym
 
     //Get x and y proportion of symbol to block
-    let xProp, yProp = (symCenter.X - block.TopLeft.X) / block.W, (symCenter.Y - block.TopLeft.Y) / block.H
+    let xProp = (symCenter.X - block.TopLeft.X) / block.W
+    let yProp = (symCenter.Y - block.TopLeft.Y) / block.H
 
-    let newCenter = 
-        match scaleType with
-            | ScaleUp ->
-                {X = (block.TopLeft.X-5.) + ((block.W+10.) * xProp); Y = (block.TopLeft.Y-5.) + ((block.H+10.) * yProp)}
-            | ScaleDown ->
-                {X= (block.TopLeft.X+5.) + ((block.W-10.) * xProp); Y=  (block.TopLeft.Y+5.) + ((block.H-10.) * yProp)}
+    // DRY & LFM: Abstract scaling operation to reduce repetition and improve clarity.
+    let scaleOffset = match scaleType with
+                      | ScaleUp -> -5.0, 10.0
+                      | ScaleDown -> 5.0, -10.0
+
+    let newCenterX = (block.TopLeft.X + fst scaleOffset) + ((block.W + snd scaleOffset) * xProp)
+    let newCenterY = (block.TopLeft.Y + fst scaleOffset) + ((block.H + snd scaleOffset) * yProp)
+    let newCenter = { X = newCenterX; Y = newCenterY }
 
     let h,w = getRotatedHAndW sym
-    let newPos = {X = (newCenter.X) - w/2.; Y= (newCenter.Y) - h/2.}
+    let newPos = { X = newCenter.X - w / 2.0; Y = newCenter.Y - h / 2.0 }
     let newComponent = { sym.Component with X = newPos.X; Y = newPos.Y}
 
-    {sym with Pos = newPos; Component=newComponent; LabelHasDefaultPos=true}
+    { sym with Pos = newPos; Component = newComponent; LabelHasDefaultPos = true }
 
 
-/// HLP 23: AUTHOR Klapper - Rotates a symbol based on a degree, including: ports and component parameters.
-
+// Change: Add XML documentation (DUI)
+/// <summary> HLP 23: AUTHOR Klapper - Rotates a symbol based on a degree, including: ports and component parameters. </summary>
+/// <param name="degree">The rotation degree (Degree0, Degree90, Degree180, Degree270).</param>
+/// <param name="sym">The symbol to rotate.</param>
+/// <returns>The rotated symbol, or the original symbol if Degree0 is specified.</returns>
 let rotateSymbolByDegree (degree: Rotation) (sym:Symbol)  =
-    let pos = {X = sym.Component.X + sym.Component.W / 2.0 ; Y = sym.Component.Y + sym.Component.H / 2.0 }
+    // Change: Renamed Identifier to make it clear we are calculating the center of the symbol (DUI)
+    let symbolCenterPos = 
+        { X = sym.Component.X + sym.Component.W / 2.0; 
+          Y = sym.Component.Y + sym.Component.H / 2.0 }
+    
     match degree with
     | Degree0 -> sym
-    | _ ->  rotateSymbolInBlock degree pos sym
+    | _ ->  rotateSymbolInBlock degree symbolCenterPos sym
     
 
 /// <summary>HLP 23: AUTHOR Ismagilov - Rotates a block of symbols, returning the new symbol model</summary>
@@ -486,23 +520,31 @@ let rotateSymbolByDegree (degree: Rotation) (sym:Symbol)  =
 /// <param name="rotation"> Type of rotation to do</param>
 /// <returns>New rotated symbol model</returns>
 let rotateBlock (compList:ComponentId list) (model:SymbolT.Model) (rotation:Rotation) = 
-
-    printfn "running rotateBlock"
-    let SelectedSymbols = List.map (fun x -> model.Symbols |> Map.find x) compList
-    let UnselectedSymbols = model.Symbols |> Map.filter (fun x _ -> not (List.contains x compList))
+    let selectedSymbols = List.map (fun x -> model.Symbols |> Map.find x) compList
+    let unselectedSymbols = model.Symbols |> Map.filter (fun x _ -> not (List.contains x compList))
 
     //Get block properties of selected symbols
-    let block = getBlock SelectedSymbols
-
+    let block = getBlock selectedSymbols
+    
+    let invertedRotation = invertRotation rotation
+    
     //Rotated symbols about the center
     let newSymbols = 
-        List.map (fun x -> rotateSymbolInBlock (invertRotation rotation) (block.Centre()) x) SelectedSymbols 
+        List.map (fun x -> rotateSymbolInBlock invertedRotation (block.Centre()) x) selectedSymbols 
 
+    // Change: Create new identifier updatedSymbols and use pipelines to split up operation (DUI, LFM)
+    let updatedSymbols = 
+        newSymbols
+        |> List.map2 (fun x y -> (x,y)) compList
+        |> Map.ofList
+        |> Map.fold (fun acc k v -> Map.add k v acc) unselectedSymbols
+    
     //return model with block of rotated selected symbols, and unselected symbols
-    {model with Symbols = 
-                ((Map.ofList (List.map2 (fun x y -> (x,y)) compList newSymbols)
-                |> Map.fold (fun acc k v -> Map.add k v acc) UnselectedSymbols)
-    )}
+    { model with Symbols = updatedSymbols }
+
+// bam21 End
+// --------------------------------------------------------------------------------------------------------
+// --------------------------------------------------------------------------------------------------------
 
 let oneCompBoundsBothEdges (selectedSymbols: Symbol list) = 
     let maxXSymCentre = 
