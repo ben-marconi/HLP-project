@@ -6,6 +6,7 @@ open DrawModelType.SymbolT
 open CommonTypes
 open Optics
 open Optics.Optic
+open DrawModelType.BusWireT
 
 //B1R
 let getCustomSymbolDimension (sym:Symbol) =
@@ -43,7 +44,18 @@ let setSymbolPortsOnSide side ports sym =
 let reversedInputPorts_ = Lens.create (fun (a:Symbol) -> a.ReversedInputPorts) (fun s a -> {a with ReversedInputPorts = s})
 
 //B5R
-//let getPortPosition (port:PortId) (sheet:SheetInfo) =
+let getPortPosition (sym:Symbol) (port:string) =
+    let comp = get component_ sym
+    let edge = match Map.tryFind port sym.PortMaps.Orientation with
+                | Some x -> x
+                | None -> failwithf $"Port with Id '%s{port}' not found on symbol"
+    let idx = sym.PortMaps.Order[edge] |> List.findIndex (fun id -> id = port) //Shouldn't fail due to previous check
+    let totalPorts = sym.PortMaps.Order[edge] |> List.length
+    match edge with
+    | Top -> {X = comp.X + (float idx / float (totalPorts+1)) * comp.W; Y = comp.Y}
+    | Bottom -> {X = comp.X + (float idx / float (totalPorts+1)) * comp.W; Y = comp.Y - comp.H}
+    | Left -> {X = comp.X; Y = comp.Y - (float idx / float (totalPorts+1))}
+    | Right -> {X = comp.X + comp.W ; Y = comp.Y - (float idx / float (totalPorts+1))}
 
 //B6R
 let getBoundingBoxOfSymbol (model:SheetT.Model) (sym:Symbol) =
@@ -78,4 +90,44 @@ let countSymbolIntersections (sheet: SheetT.Model) =
 
 //T2R
 let countVisibleWireIntersections (sheet: SheetT.Model) =
-    failwithf "Not Implemented"
+    let wireModel = sheet.Wire
+    wireModel.Wires
+    |> Map.filter (fun _ wire -> BusWireRoute.findWireSymbolIntersections wireModel wire <> [])
+    |> Map.toList
+    |> List.length
+
+let countWireIntersectsWire (w1:Wire) (w2:Wire) =
+    BlockHelpers.getAbsSegments w1
+    |> List.map (fun aSeg ->
+        let folder pos1 pos2 acc seg =
+            match BlockHelpers.overlap2D (pos1,pos2) (aSeg.Start,aSeg.End) with
+            |true -> acc + 1
+            |false -> acc
+        BlockHelpers.foldOverNonZeroSegs folder 0 w2)
+    |> List.sum
+
+//T3R
+let countSegmentsCrossingRightAngle (sheet: SheetT.Model) =
+    let wireModel = sheet.Wire
+    let wires = wireModel.Wires
+                |> Map.toList
+    List.allPairs wires wires
+    //Remove wires paired with themselves
+    |> List.filter (fun (w1, w2) -> fst w1 <> fst w2)
+    //Filter wires that start from the same output port
+    |> List.map (fun (w1, w2) -> snd w1, snd w2)
+    |> List.filter (fun (w1, w2) -> w1.OutputPort <> w2.OutputPort)
+    // Count the number of intersections between each wire pair
+    |> List.map (fun (w1,w2) -> countWireIntersectsWire w1 w2)
+    |> List.sum
+
+//T4R
+/// <summary>
+/// Calculate the length of the visible wires on the sheet, excluding wires that overlap from the same net
+/// </summary>
+/// <param name="sheet"></param>
+// let visibleWireLength (sheet:SheetT.Model) =
+//     let wireModel = sheet.Wire
+//     let wires = wireModel.Wires
+//                 |>
+//     wires
