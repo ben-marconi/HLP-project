@@ -14,7 +14,7 @@ open Symbol
 /// Note that in a wire with n segments a zero length (invisible) segment at any index [1..n-2] is allowed 
 /// which if present causes the two segments on either side of it to coalesce into a single visible segment.
 /// A wire can have any number of visible segments - even 1.
-let visibleSegments (wId: ConnectionId) (model: SheetT.Model): XYPos list =
+let getVisibleSegments (wId: ConnectionId) (model: SheetT.Model): XYPos list =
 
         let wire = model.Wire.Wires[wId] // get wire from model
 
@@ -174,39 +174,54 @@ let countIntersectingSymbolPairs (sheet: SheetT.Model) : int =
 
 // Adapted function to find intersections between wire segments and symbols using XYPos list
 // Adapted function to find intersections between wire segments and symbols using XYPos list and SymbolT.Model
-(*
-let findWireSymbolIntersections (model: SymbolT.Model) (segmentPositions: XYPos list) : BoundingBox list =
-    let allSymbolsIntersected =
-        model.Symbol.Symbols
-        |> Map.values
-        |> Seq.toList
-        |> List.filter (fun s -> s.Annotation = None)
-        |> List.map (fun s -> (s.Component.Type, Symbol.getSymbolBoundingBox s))
-
-
 
 // The number of distinct wire visible segments that intersect with one or more symbols.
 // Count over all visible wire segments.
 let countVisibleSegmentIntersections (model: SheetT.Model): int =
-    let convertXYPosListToSegments (visibleSegments: XYPos list) : list<Segment> =
-    // Implementation depends on how I map XYPos back to Segments
-    []
+    let convertVisibleSegmentsToSegments (wire : Wire) (posList : XYPos list) : Segment list = 
+        let getLength (pos : XYPos) : float =
+            match pos.X, pos.Y with 
+            | 0., y -> y
+            | x, 0. -> x
+            | _ -> failwithf "visibleSegment has wrong form"
+
+        posList
+        |> List.mapi (fun i pos -> 
+                        {Index =  i;
+                         Length = getLength pos;
+                         WireId = wire.WId;
+                        // Other attributes don't matter for this function so set to random values
+                         IntersectOrJumpList = [0.];
+                         Draggable = true;
+                         Mode = Auto; })
+
+    let getInitialOrientation (posList : XYPos list) : Orientation = 
+        let firstPos = List.head posList
+        match firstPos.X, firstPos.Y with
+        | 0., _ -> Vertical
+        | _  -> Horizontal
 
     // Iterate through all wires, updating each with its visible segments
-    let updateWiresWithVisibleSegments (model: SheetT.Model) : SheetT.Model =
+    let updatedModelWithNewWires  =
         model.Wire.Wires
         |> Map.toList
         |> List.map (fun (wireId, wire) ->
-            let visibleSegmentsXY = visibleSegments wireId model
-            let visibleSegments = convertVisibleSegmentsToSegments visibleSegmentsXY
+            let visibleSegmentsXY = getVisibleSegments wireId model
+            let visibleSegments = convertVisibleSegmentsToSegments wire visibleSegmentsXY
+            let newInitialOrientation = getInitialOrientation visibleSegmentsXY
             // Construct a new wire record with updated segments
-            let updatedWire = { wire with Segments = visibleSegments }
+            let updatedWire = { wire with Segments = visibleSegments; InitialOrientation = newInitialOrientation }
             (wireId, updatedWire))
         |> Map.ofList
         // Construct a new model with the updated wires
         |> fun updatedWires -> { model with Wire = { model.Wire with Wires = updatedWires } }
     
-*)
+    model.Wire.Wires
+    |> Map.toList
+    |> List.map (fun (wireId, wire) -> 
+                    BusWireRoute.findWireSymbolIntersections updatedModelWithNewWires.Wire wire )
+    |> List.map List.length
+    |> List.fold (+) 0
 
 // T3
 // The number of distinct pairs of segments that cross each other at right angles. 
@@ -261,3 +276,26 @@ let countRightAngleIntersections (model: SheetT.Model) : int =
         )
     )
     count
+
+
+
+// T4
+// Sum of wiring segment length, counting only one when there are N same-net
+// segments overlapping (this is the visible wire length on the sheet). Count over whole
+// sheet
+
+
+
+// T5
+// Number of visible wire right-angles. Count over whole sheet.
+let getVisibleRightAngleIntersections (model: SheetT.Model) : int = 
+    let getNumRightAngles (posList : XYPos list) : int = 
+        List.length posList - 1
+
+    model.Wire.Wires
+    |> Map.toList
+    |> List.map (fun (wireId, wire) ->
+        let visibleSegmentsXY = getVisibleSegments wireId model
+        getNumRightAngles visibleSegmentsXY)
+    |> List.fold (+) 0
+
