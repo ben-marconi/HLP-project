@@ -1,4 +1,49 @@
-﻿module RotateScale
+﻿(* bam2: worked on functions from flipSymbolInBlock to rotateBlock (lines 441 to 587)
+
+Summary of Most Important Changes:
+    1.  In flipSymbolInBlock, I added or reformatted pipelines in most local variable and function definitions (Transform 3).  
+        Most importantly, I replaced the final block of code which was a very long pipeline: I broke it up (Transform 3) into 
+        a defined identifier that documents an intermediate value and a separate function with a clear identifier (Transform 1).
+        These changes worked towards the DUI and LFM Principles.
+        
+        Changes in Github:
+        https://github.com/ben-marconi/HLP-project/commit/98b8acb2667ed8dc740089c129f33daa8f0ed332#diff-9e7a112f68a531037835f68fd5ba2311c4d7248b2e8fd03a1a51bba8f8f99d21R441-R466
+
+    2.  In rotateBlock, I completely changed the the code of the return value of the function. I used a separate identifier to define 
+        the new model symbols. In this definition, I used a series of pipeline operators which were not originally used (Transform 3).
+        This had the effect of Reducing Syntactic Noise (RSN) and worked towards improving the DUI and LFM principles. 
+        
+        Changes in Github:
+        https://github.com/ben-marconi/HLP-project/commit/98b8acb2667ed8dc740089c129f33daa8f0ed332#diff-9e7a112f68a531037835f68fd5ba2311c4d7248b2e8fd03a1a51bba8f8f99d21R535-R544
+    
+    3.  In scaleSymbolInBlock, my most important contribution was changing the way the new center of the symbol (newCenter) was
+        calculated by abstracting the scaling operation (Transform 1) in line 493. This helped reduce repetition and improve clarity,
+        working towards the DRY, RSN and LYM principles. 
+        
+        Changes in Github
+        https://github.com/ben-marconi/HLP-project/commit/98b8acb2667ed8dc740089c129f33daa8f0ed332#diff-9e7a112f68a531037835f68fd5ba2311c4d7248b2e8fd03a1a51bba8f8f99d21R485-R492
+    
+    4.  I added XML documentation to the rotateSymbolByDegree function (DUI), which was previously missing. I added explanations about what 
+        the parameters are and what the function returns. I also renamed an identifier for further clarity (DUI).
+
+        Changes in Github:
+        https://github.com/ben-marconi/HLP-project/commit/98b8acb2667ed8dc740089c129f33daa8f0ed332#diff-9e7a112f68a531037835f68fd5ba2311c4d7248b2e8fd03a1a51bba8f8f99d21R501-R505
+
+Transforms Used:
+    1.  Functional Abstraction
+        a.  flipSymbolInBlock: Introduced applyFlip function to abstract flipping logic, making the main function more focused and simpler.
+        b.  rotateBlock: Abstracted the process of updating symbols after rotation into clearer, distinct steps, simplifying the overall logic.
+        c.  scaleSymbolInBlock: Abstracted the scaling operation by creating a seperate match condition
+    
+    3.  Pipelines
+        a.  flipSymbolInBlock: I broke down a very long pipeline into an identifier and a separate function. I also used pipelines in the definition 
+            of updatedTopLeft and flippedPortOrientation. 
+        b.  rotateBlock: In this function I used a separate identifier to define the new model symbols. In this definition, I used a series of 
+            pipeline operators which were not originally used and made the code much clearer in doing so.
+*)
+
+
+module RotateScale
 open CommonTypes
 open DrawModelType
 open DrawModelType.SymbolT
@@ -392,49 +437,8 @@ let rotateSymbolInBlock
 
 
 
-(* bam21 (worked on functions from flipSymbolInBlock to rotateBlock)
-Summary of Changes:
-    1.  In flipSymbolInBlock, I added or reformatted pipelines in most local variable and function definitions (Transform 3).  
-        Most importantly, I replaced the final block of code which was a very long pipeline: I broke it up (Transform 3) into 
-        a defined identifier that documents an intermediate value and a separate function with a clear identifier (Transform 1).
-        These changes worked towards the DUI and LFM Principles.
-        
-        Changes in Github:
-        https://github.com/ben-marconi/HLP-project/commit/98b8acb2667ed8dc740089c129f33daa8f0ed332#diff-9e7a112f68a531037835f68fd5ba2311c4d7248b2e8fd03a1a51bba8f8f99d21R441-R466
 
-    2.  In rotateBlock, I completely changed the the code of the return value of the function. I used a separate identifier to define 
-        the new model symbols. In this definition, I used a series of pipeline operators which were not originally used (Transform 3).
-        This had the effect of Reducing Syntactic Noise (RSN) and worked towards improving the DUI and LFM principles. 
-        
-        Changes in Github:
-        https://github.com/ben-marconi/HLP-project/commit/98b8acb2667ed8dc740089c129f33daa8f0ed332#diff-9e7a112f68a531037835f68fd5ba2311c4d7248b2e8fd03a1a51bba8f8f99d21R535-R544
-    
-    3.  In scaleSymbolInBlock, my most important contribution was changing the way the new center of the symbol (newCenter) was
-        calculated by abstracting the scaling operation (Transform 1) in line 493. This helped reduce repetition and improve clarity,
-        working towards the DRY, RSN and LYM principles. 
-        
-        Changes in Github
-        https://github.com/ben-marconi/HLP-project/commit/98b8acb2667ed8dc740089c129f33daa8f0ed332#diff-9e7a112f68a531037835f68fd5ba2311c4d7248b2e8fd03a1a51bba8f8f99d21R485-R492
-    
-    4.  I added XML documentation to the rotateSymbolByDegree function (DUI), which was previously missing. I added explanations about what 
-        the parameters are and what the function returns. I also renamed an identifier for further clarity (DUI).
-
-        Changes in Github:
-        https://github.com/ben-marconi/HLP-project/commit/98b8acb2667ed8dc740089c129f33daa8f0ed332#diff-9e7a112f68a531037835f68fd5ba2311c4d7248b2e8fd03a1a51bba8f8f99d21R501-R505
-
-Transforms Used:
-    1.  Functional Abstraction
-        a.  flipSymbolInBlock: Introduced applyFlip function to abstract flipping logic, making the main function more focused and simpler.
-        b.  rotateBlock: Abstracted the process of updating symbols after rotation into clearer, distinct steps, simplifying the overall logic.
-        c.  scaleSymbolInBlock: Abstracted the scaling operation by creating a seperate match condition
-    
-    3.  Pipelines
-        a.  flipSymbolInBlock: I broke down a very long pipeline into an identifier and a separate function. I also used pipelines in the definition 
-            of updatedTopLeft and flippedPortOrientation. 
-        b.  rotateBlock: In this function I used a separate identifier to define the new model symbols. In this definition, I used a series of 
-            pipeline operators which were not originally used and made the code much clearer in doing so.
-*)
-
+// bam21 start
 /// <summary>HLP 23: AUTHOR Ismagilov - Flip a symbol horizontally or vertically in its block.</summary>
 /// <param name="flip">  Flip horizontally or vertically</param>
 /// <param name="block"> Bounding box of selected components</param>
@@ -581,7 +585,7 @@ let rotateBlock (compList:ComponentId list) (model:SymbolT.Model) (rotation:Rota
     { model with Symbols = updatedSymbols }
 
 // bam21 End
-// --------------------------------------------------------------------------------------------------------
+
 
 
 let oneCompBoundsBothEdges (selectedSymbols: Symbol list) = 
