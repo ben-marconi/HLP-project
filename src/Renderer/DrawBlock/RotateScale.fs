@@ -1,4 +1,4 @@
-﻿(* bam2: worked on functions from flipSymbolInBlock to rotateBlock (lines 441 to 587)
+﻿(* bam21: worked on functions from flipSymbolInBlock to rotateBlock (lines 441 to 587)
 
 Summary of Most Important Changes:
     1.  In flipSymbolInBlock, I added or reformatted pipelines in most local variable and function definitions (Transform 3).  
