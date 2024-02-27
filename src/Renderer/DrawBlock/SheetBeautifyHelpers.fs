@@ -171,10 +171,6 @@ let countIntersectingSymbolPairs (sheet: SheetT.Model) : int =
 
 
 // T2
-
-// Adapted function to find intersections between wire segments and symbols using XYPos list
-// Adapted function to find intersections between wire segments and symbols using XYPos list and SymbolT.Model
-
 // The number of distinct wire visible segments that intersect with one or more symbols.
 // Count over all visible wire segments.
 let countVisibleSegmentIntersections (model: SheetT.Model): int =
@@ -249,33 +245,30 @@ let countRightAngleIntersections (model: SheetT.Model) : int =
         | _ -> Vertical
 
     // Iterate over each pair of wires and count intersections
-    let mutable count = 0
-    wireSegmentsMap 
-    |> Map.iter (fun wireId1 segments1 ->
-        wireSegmentsMap 
-        |> Map.iter (fun wireId2 segments2 ->
+    wireSegmentsMap
+    |> Map.fold (fun acc1 wireId1 segments1 ->
+        wireSegmentsMap
+        |> Map.fold (fun acc2 wireId2 segments2 ->
             // Ensure wireId1 is less than wireId2 to avoid double counting
             if wireId1 < wireId2 then
-                segments1 
-                |> List.iteri (fun index1 seg1 ->
+                segments1 |> List.indexed
+                |> List.fold (fun acc3 (index1, seg1) ->
                     let orientation1 = getSegmentOrientation index1 (model.Wire.Wires |> Map.find wireId1 |> fun wire -> wire.InitialOrientation)
-                    segments2 
-                    |> List.iteri (fun index2 seg2 ->
+                    segments2 |> List.indexed
+                    |> List.fold (fun acc4 (index2, seg2) ->
                         let orientation2 = getSegmentOrientation index2 (model.Wire.Wires |> Map.find wireId2 |> fun wire -> wire.InitialOrientation)
-                        // Only compare Horizontal with Vertical to avoid redundant comparisons
+                        // Only compare Horizontal with Vertical
                         match orientation1, orientation2 with
-                        | Horizontal, Vertical -> 
-                            if intersects seg1 seg2 then 
-                                count <- count + 1
-                        | Vertical, Horizontal -> 
-                            if intersects seg2 seg1 then 
-                                count <- count + 1
-                        | _, _ -> () // Ignore other combinations as they're handled in the reverse match
-                    )
-                )
-        )
-    )
-    count
+                        | Horizontal, Vertical ->
+                            if intersects seg1 seg2 then acc4 + 1 else acc4
+                        | Vertical, Horizontal ->
+                            if intersects seg2 seg1 then acc4 + 1 else acc4
+                        | _, _ -> acc4 // Ignore other combinations
+                    ) acc3
+                ) acc2
+            else acc2
+        ) acc1
+    ) 0 // Initial accumulator for the fold
 
 
 
