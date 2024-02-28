@@ -180,7 +180,7 @@ let countIntersectingSymbolPairs (sheet: SheetT.Model) : int =
 /// <summary>Counts the number of distinct wire visible segments that intersect with one or more symbols on a sheet.</summary>
 /// <param name="model">The sheet model containing the wires and symbols.</param>
 /// <returns>The total number of visible wire segment intersections with symbols.</returns>
-let countVisibleSegmentIntersections (model: SheetT.Model): int =
+let countSegmentSymbolIntersections (model: SheetT.Model): int =
     let convertVisibleSegmentsToSegments (wire : Wire) (posList : XYPos list) : Segment list = 
         let getLength (pos : XYPos) : float =
             match pos.X, pos.Y with 
@@ -287,10 +287,10 @@ let countRightAngleSegmentIntersections (model: SheetT.Model) : int =
 
 
 // T5
-/// <summary>Counts the number of visible wire right-angle intersections over the whole sheet.</summary>
-/// <param name="model">The sheet model to count for visible right-angle intersections.</param>
-/// <returns>The total number of visible right-angle intersections.</returns>
-let getVisibleRightAngleIntersections (model: SheetT.Model) : int = 
+/// <summary>Counts the number of visible wire right-angles over the whole sheet.</summary>
+/// <param name="model">The sheet model to count for visible right-angles in wires.</param>
+/// <returns>The total number of visible wire right-angle.</returns>
+let getWireRightAngles (model: SheetT.Model) : int = 
     let getNumRightAngles (posList : XYPos list) : int = 
         List.length posList - 1
 
