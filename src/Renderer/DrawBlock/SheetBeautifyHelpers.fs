@@ -119,27 +119,8 @@ let reverseInputPorts_ =
 /// <param name="symbol">The symbol containing the port.</param>
 /// <param name="portId">The id of the port whose position is being queried.</param>
 /// <returns>The position of the port if found, otherwise None.</returns>
-let getPortPosition (symbol: Symbol) (portId: string) : Option<XYPos> =
-    let comp = symbol.Component
-    let maybeEdge = symbol.PortMaps.Orientation |> Map.tryFind portId
-    let portsOnEdge = maybeEdge |> Option.bind (fun edge -> symbol.PortMaps.Order |> Map.tryFind edge)
-    match maybeEdge, portsOnEdge with
-    | Some edge, Some ports ->
-        let index = ports |> List.tryFindIndex (fun id -> id = portId)
-        match index with
-        | None -> None
-        | Some index ->
-            let gap, basePos = 
-                match edge with
-                | Top -> comp.W / float (List.length ports + 1), comp.Y
-                | Bottom -> comp.W / float (List.length ports + 1), comp.Y + comp.H
-                | Left -> comp.H / float (List.length ports + 1), comp.X
-                | Right -> comp.H / float (List.length ports + 1), comp.X + comp.W
-            let offset = gap * float (index + 1)
-            match edge with
-            | Top | Bottom -> Some { X = comp.X + offset; Y = basePos }
-            | Left | Right -> Some { X = basePos; Y = comp.Y + offset }
-    | _ -> None
+let getPortPosition (model: SymbolT.Model) (portId: string) : XYPos =
+    getPortLocation None model portId
     
 // B6
 /// <summary>Returns the bounding box of a symbol's outline</summary>
