@@ -504,36 +504,97 @@ let rotateBlock (compList:ComponentId list) (model:SymbolT.Model) (rotation:Rota
                 |> Map.fold (fun acc k v -> Map.add k v acc) UnselectedSymbols)
     )}
 
-let oneCompBoundsBothEdges (selectedSymbols: Symbol list) = 
-    let maxXSymCentre = 
-            selectedSymbols
-            |> List.maxBy (fun (x:Symbol) -> x.Pos.X + snd (getRotatedHAndW x)) 
-            |> getRotatedSymbolCentre
-    let minXSymCentre =
-            selectedSymbols
-            |> List.minBy (fun (x:Symbol) -> x.Pos.X)
-            |> getRotatedSymbolCentre
-    let maxYSymCentre = 
-            selectedSymbols
-            |> List.maxBy (fun (y:Symbol) -> y.Pos.Y+ fst (getRotatedHAndW y))
-            |> getRotatedSymbolCentre
-    let minYSymCentre =
-            selectedSymbols
-            |> List.minBy (fun (y:Symbol) -> y.Pos.Y)
-            |> getRotatedSymbolCentre
-    (maxXSymCentre.X = minXSymCentre.X) || (maxYSymCentre.Y = minYSymCentre.Y)
+//-------------------------------------------------------------------------------------
+//-------------------------------------------------------------------------------------
+//-------------------------------------------------------------------------------------
+//-------------------------------------------------------------------------------------
+// START acs221 - RotateScale improvements
+
+
+// CHANGES
+// Firstly, I have added XML comments to improve clarity so that the purpose of the function quickly obvious.
+// Additionally, I have restructured the function by adding two new local functions, centreWithLargestEdge and centreWithSmallestEdge.
+// Utilising structural abstraction, the purpose of these functions is to abstract the previous repetitive logic used in finding the max and min values of the symbol edges.
+// This change helps the code better meet the DRY (Don't Repeat Yourself) and LFM (Layout Follows Meaning) principles particularly.
+// Overall, by ensuring the new function names have thoughtful meaning, these changes enhance the readability, structure and clarity of the code.
+
+
+// /// <summary>
+// /// Determines whether one symbol bounds both edges of a given list of symbols along a particular direction, either horizontally or vertically.
+// /// </summary>
+// /// <param name="selectedSymbols">List of symbols for evaluation.</param>
+// /// <returns>True if any symbol bounds both edges of all others along either axis, otherwise, false</returns>
+// let oneCompBoundsBothEdges (selectedSymbols: Symbol list) = 
+//     let centreWithLargestEdge symbolEdge = 
+//         selectedSymbols
+//         |> List.maxBy symbolEdge
+//         |> getRotatedSymbolCentre
+        
+//     let centreWithSmallestEdge symbolEdge = 
+//         selectedSymbols
+//         |> List.minBy symbolEdge
+//         |> getRotatedSymbolCentre
+
+//     let maxXSymCentre = centreWithLargestEdge (fun sym -> sym.Pos.X + snd (getRotatedHAndW sym))
+//     let minXSymCentre = centreWithSmallestEdge (fun sym -> sym.Pos.X)
+//     let maxYSymCentre = centreWithLargestEdge (fun sym -> sym.Pos.Y + fst (getRotatedHAndW sym))
+//     let minYSymCentre = centreWithSmallestEdge (fun sym -> sym.Pos.Y)
+
+//     (maxXSymCentre.X = minXSymCentre.X) || (maxYSymCentre.Y = minYSymCentre.Y)
+
+
+// POSSIBLE ADAPTION --------------------------------
+
+
+// Seperation of concerns, reusability key words to use
+// MAKES NAMES MORE CONSISTENT WITH EACH OTHER TO EASIER TO SPOT THAT THEY ARE THE SAME IN BOTH FUNCTIONS
+
+/// <summary>
+/// Identifies the edge symbols within a list of symbols, along both X and Y axes
+/// </summary>
+/// <param name="selectedSymbols">The list of symbols to examine.</param>
+/// <returns>
+/// A tuple of four symbols which have the largest X, smallest X, largest Y, and smallest Y positions, respectively.
+/// </returns>
+let findOutermostSymbols (selectedSymbols: Symbol list) = 
+    let symbolWithLargestEdge symbolEdge = 
+        selectedSymbols |> List.maxBy symbolEdge
     
+    let symbolWithSmallestEdge symbolEdge = 
+        selectedSymbols |> List.minBy symbolEdge
+    
+    let maxXSym = symbolWithLargestEdge (fun sym -> sym.Pos.X + snd (getRotatedHAndW sym))
+    let minXSym = symbolWithSmallestEdge (fun sym -> sym.Pos.X)
+    let maxYSym = symbolWithLargestEdge (fun sym -> sym.Pos.Y + fst (getRotatedHAndW sym))
+    let minYSym = symbolWithSmallestEdge (fun sym -> sym.Pos.Y)
+
+    (maxXSym, minXSym, maxYSym, minYSym)
+
+/// <summary>
+/// Determines whether one symbol bounds both edges of a given list of symbols along a particular direction, either horizontally or vertically.
+/// </summary>
+/// <param name="selectedSymbols">List of symbols for evaluation.</param>
+/// <returns>True if any symbol bounds both edges of all others along either axis, otherwise, false</returns>
+let oneCompBoundsBothEdges (selectedSymbols: Symbol list) : bool = 
+    let (maxXSym, minXSym, maxYSym, minYSym) = selectedSymbols |> findOutermostSymbols
+
+    let maxXSymCentre = maxXSym |> getRotatedSymbolCentre
+    let minXSymCentre = minXSym |> getRotatedSymbolCentre
+    let maxYSymCentre = maxYSym |> getRotatedSymbolCentre
+    let minYSymCentre = minYSym |> getRotatedSymbolCentre
+
+    (maxXSymCentre.X = minXSymCentre.X) || (maxYSymCentre.Y = minYSymCentre.Y)
 
 let findSelectedSymbols (compList: ComponentId list) (model: SymbolT.Model) = 
     List.map (fun x -> model.Symbols |> Map.find x) compList
 
 let getScalingFactorAndOffsetCentre (min:float) (matchMin:float) (max:float) (matchMax:float) = 
     let scaleFact = 
-        if min = max || matchMax <= matchMin then 1. 
-        else (matchMin - matchMax) / (min - max)
-    let offsetC = 
+        if min = max || matchMax <= matchMin then 1. //checks the original range is not a single point and that the target range (matchMin to matchMac is larger than a point) - if either condition not met, no scaling used
+        else (matchMin - matchMax) / (min - max)     // ratio of target size to original size determines scaling
+    let offsetC =                                    // offset accounts for the scaling effect on positioning
         if scaleFact = 1. then 0.
-        else (matchMin - min * scaleFact) / (1.-scaleFact)
+        else (matchMin - min * scaleFact) / (1.-scaleFact)  
     (scaleFact, offsetC)
 
 /// Return set of floats that define how a group of components is scaled
@@ -541,42 +602,29 @@ let getScalingFactorAndOffsetCentreGroup
     (matchBBMin:XYPos)
     (matchBBMax:XYPos)
     (selectedSymbols: Symbol list) : ((float * float) * (float * float)) = 
-    //(compList: ComponentId list)
-    //(model: SymbolT.Model)
-
-    //let selectedSymbols = List.map (fun x -> model.Symbols |> Map.find x) compList
-
-    let maxXSym = 
-            selectedSymbols
-            |> List.maxBy (fun (x:Symbol) -> x.Pos.X + snd (getRotatedHAndW x)) 
-
+   
+    
+    let (maxXSym, minXSym, maxYSym, minYSym) = selectedSymbols |> findOutermostSymbols 
+ 
     let oldMaxX = (maxXSym |> getRotatedSymbolCentre).X
     let newMaxX = matchBBMax.X - (snd (getRotatedHAndW maxXSym))/2.
 
-    let minXSym =
-            selectedSymbols
-            |> List.minBy (fun (x:Symbol) -> x.Pos.X)
-
     let oldMinX = (minXSym |> getRotatedSymbolCentre).X
     let newMinX = matchBBMin.X + (snd (getRotatedHAndW minXSym))/2.
-    
-    let maxYSym = 
-            selectedSymbols
-            |> List.maxBy (fun (y:Symbol) -> y.Pos.Y+ fst (getRotatedHAndW y))
 
     let oldMaxY = (maxYSym |> getRotatedSymbolCentre).Y
     let newMaxY = matchBBMax.Y - (fst (getRotatedHAndW maxYSym))/2.
-
-    let minYSym =
-            selectedSymbols
-            |> List.minBy (fun (y:Symbol) -> y.Pos.Y)
-
+   
     let oldMinY = (minYSym |>  getRotatedSymbolCentre).Y
     let newMinY = matchBBMin.Y + (fst (getRotatedHAndW minYSym))/2.
     
     let xSC = getScalingFactorAndOffsetCentre oldMinX newMinX oldMaxX newMaxX
     let ySC = getScalingFactorAndOffsetCentre oldMinY newMinY oldMaxY newMaxY
-    (xSC, ySC)
+    (xSC, ySC) 
+
+//^^^^Rename xSC and ySC to be more clear 
+
+// Improved clarity of XML documentation
 
 /// Alter position of one symbol as needed in a scaling operation
 let scaleSymbol
@@ -585,16 +633,27 @@ let scaleSymbol
         : Symbol = 
     let symCentre =  getRotatedSymbolCentre sym
     let translateFunc scaleFact offsetC coordinate = (coordinate - offsetC) * scaleFact + offsetC
-    let xSC = fst xYSC
-    let ySC = snd xYSC
-    let newX = translateFunc (fst xSC) (snd xSC) symCentre.X
-    let newY = translateFunc (fst ySC) (snd ySC) symCentre.Y
+    
+// renamed from xSC and ySC into the individual scale and offset names for better readability
+// - Parameter decomposition
+    let (xScale, xOffset) = fst xYSC
+    let (yScale, yOffset) = snd xYSC
+    let newX = translateFunc (xScale) (xOffset) symCentre.X
+    let newY = translateFunc (yScale) (yOffset) symCentre.Y
 
     let symCentreOffsetFromTopLeft = {X = (snd (getRotatedHAndW sym))/2.; Y = (fst (getRotatedHAndW sym))/2.}
     let newTopLeftPos = {X = newX; Y = newY} - symCentreOffsetFromTopLeft
     let newComp = {sym.Component with X = newTopLeftPos.X; Y = newTopLeftPos.Y}
 
     {sym with Pos = newTopLeftPos; Component = newComp; LabelHasDefaultPos = true}
+
+// END acs221 - RotateScale improvements
+//-------------------------------------------------------------------------------------
+//-------------------------------------------------------------------------------------
+//-------------------------------------------------------------------------------------
+//-------------------------------------------------------------------------------------
+
+
 
 /// Part of the rotate and scale code       
 let groupNewSelectedSymsModel
