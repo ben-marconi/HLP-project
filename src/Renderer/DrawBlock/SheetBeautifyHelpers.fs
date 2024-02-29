@@ -131,3 +131,23 @@ let countSegmentsCrossingRightAngle (sheet: SheetT.Model) =
 //     let wires = wireModel.Wires
 //                 |>
 //     wires
+
+let countLabelIntersections (sheet:SheetT.Model) =
+    let wires = sheet.Wire.Wires |> Map.toList
+    let labels = sheet.Wire.Symbol.Symbols
+                 |> Map.filter (fun _ sym -> sym.Component.Type = IOLabel)
+    let labelBoxes = labels
+                     |> Map.map (fun _ sym -> getBoundingBoxOfSymbol sheet sym)
+                     |> Map.toList
+                     |> List.choose (fun (_, x) -> x)
+    List.allPairs wires labelBoxes
+    |> List.map (fun (w,bbox) ->
+            let folder pos1 pos2 acc seg =
+                match BlockHelpers.overlap2D (pos1,pos2) (bbox.TopLeft,bbox.BottomRight()) with
+                | true -> acc + 1
+                | false -> acc
+            BlockHelpers.foldOverNonZeroSegs folder 0 (snd w))
+    |> List.sum
+
+
+
