@@ -12,7 +12,7 @@ open Optics
 open BlockHelpers
 open Symbol //added -check
 
-// Copied for use in T2
+// Copied for use in helper functions
 /// The visible segments of a wire, as a list of vectors, from source end to target end.
 /// Note that in a wire with n segments a zero length (invisible) segment at any index [1..n-2] is allowed 
 /// which if present causes the two segments on either side of it to coalesce into a single visible segment.
@@ -157,42 +157,42 @@ let countIntersectingSymbolPairs (sheet: SheetT.Model) : int =
 
 // T2 - Read the number of distinct wire visible segments that intersect with one or more symbols. Counter over all visible wire segments
 
-let countWireSegmentsIntersectingSymbols (model: SheetT.Model) : int =
+// let countWireSegmentsIntersectingSymbols (model: SheetT.Model) : int =
     
-    let symbolsBoundingBoxes = 
-        model.Wire.Symbol.Symbols 
-        |> Map.values
-        |> Seq.map getSymbolBoundingBox
-        |> Seq.toList
+//     let symbolsBoundingBoxes = 
+//         model.Wire.Symbol.Symbols 
+//         |> Map.values
+//         |> Seq.map getSymbolBoundingBox
+//         |> Seq.toList
 
-    let segmentIntersectsAnySymbol (segmentStart: XYPos) (segmentEnd: XYPos) : bool =
-        symbolsBoundingBoxes
-        |> List.exists (fun bb -> 
-            match BlockHelpers.segmentIntersectsBoundingBox bb segmentStart segmentEnd with
-            | Some _ -> true
-            | None -> false)
+//     let segmentIntersectsAnySymbol (segmentStart: XYPos) (segmentEnd: XYPos) : bool =
+//         symbolsBoundingBoxes
+//         |> List.exists (fun bb -> 
+//             match BlockHelpers.segmentIntersectsBoundingBox bb segmentStart segmentEnd with
+//             | Some _ -> true
+//             | None -> false)
 
-    // NEEDS REVIEWING
-    let getAbsoluteSegmentPositions (wire: BusWireT.Wire) (model: SheetT.Model) : (XYPos * XYPos) list =
-        let startPos = wire.StartPos
-        let segmentVectors = visibleSegments wire.WId model
+//     // NEEDS REVIEWING
+//     let getAbsoluteSegmentPositions (wire: BusWireT.Wire) (model: SheetT.Model) : (XYPos * XYPos) list =
+//         let startPos = wire.StartPos
+//         let segmentVectors = visibleSegments wire.WId model
        
-        segmentVectors
-        |> List.fold (fun (acc, lastEnd) vec -> 
-            let nextEnd = { X = lastEnd.X + vec.X; Y = lastEnd.Y + vec.Y }
-            (acc @ [(lastEnd, nextEnd)], nextEnd)) ([], startPos) 
-        |> fst 
+//         segmentVectors
+//         |> List.fold (fun (acc, lastEnd) vec -> 
+//             let nextEnd = { X = lastEnd.X + vec.X; Y = lastEnd.Y + vec.Y }
+//             (acc @ [(lastEnd, nextEnd)], nextEnd)) ([], startPos) 
+//         |> fst 
     
-    model.Wire.Wires
-    |> Map.fold (fun acc _ wire ->  
-        let segmentPositions = getAbsoluteSegmentPositions wire model 
-        let intersections = 
-            segmentPositions
-            |> List.pairwise
-            |> List.fold (fun count (startPos, endPos) -> 
-                if segmentIntersectsAnySymbol startPos endPos then count + 1 else count) 0
+//     model.Wire.Wires
+//     |> Map.fold (fun acc _ wire ->  
+//         let segmentPositions = getAbsoluteSegmentPositions wire model 
+//         let intersections = 
+//             segmentPositions
+//             |> List.pairwise
+//             |> List.fold (fun count (startPos, endPos) -> 
+//                 if segmentIntersectsAnySymbol startPos endPos then count + 1 else count) 0
         
-        acc + intersections) 0 
+//         acc + intersections) 0 
 
 
 //getwiresandbox
