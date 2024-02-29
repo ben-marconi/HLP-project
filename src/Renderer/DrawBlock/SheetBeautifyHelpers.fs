@@ -1,4 +1,5 @@
 ﻿module SheetBeautifyHelpers
+open BlockHelpers
 open CommonTypes
 open DrawHelpers
 open DrawModelType
@@ -232,50 +233,46 @@ let countSegmentSymbolIntersections (model: SheetT.Model): int =
 /// <returns>The total number of right angle intersections between segments.</returns>
 let countRightAngleSegmentIntersections (model: SheetT.Model) : int =
     // Extract wires from model
-    let wires = model.Wire.Wires |> Map.toSeq |> Seq.map snd
-    
-    // Map of WireId to non-zero absolute segments
-    let wireSegmentsMap = 
-        wires 
-        |> Seq.map (fun wire -> wire.WId, BlockHelpers.getNonZeroAbsSegments wire)
-        |> Map.ofSeq
+    let wires = model.Wire.Wires
 
-    let intersects (hSegment: ASegment) (vSegment: ASegment) : bool =
-        let xIntersects = hSegment.Start.X < vSegment.Start.X && hSegment.End.X > vSegment.End.X
-        let yIntersects = hSegment.Start.Y > vSegment.Start.Y && hSegment.Start.Y < vSegment.End.Y
+    // Function to check whether two segments intersect
+    let segmentsIntersect (segment1: ASegment) (segment2: ASegment) : bool =
+        let xIntersects = overlap1D (segment1.Start.X, segment1.End.X) (segment2.Start.X, segment2.End.X)
+        let yIntersects = overlap1D (segment1.Start.Y, segment1.End.Y) (segment2.Start.Y, segment2.End.Y)
         xIntersects && yIntersects
 
-    // Function to determine if a segment is horizontal or vertical based on its index and wire's initial orientation
-    let getSegmentOrientation (index: int) (initialOrientation: Orientation) : Orientation =
-        match index % 2, initialOrientation with
-        | 0, Horizontal | 1, Vertical -> Horizontal
-        | _ -> Vertical
+    // Function to check whether two segments are perpendicular
+    let areSegmentsPerpendicular (segment1: ASegment) (segment2: ASegment) : bool =
+        match segment1.Orientation, segment2.Orientation with
+        | Horizontal, Vertical | Vertical, Horizontal -> true
+        | _ -> false
 
-    // Iterate over each pair of wires and count intersections
-    wireSegmentsMap
-    |> Map.fold (fun acc1 wireId1 segments1 ->
-        wireSegmentsMap
-        |> Map.fold (fun acc2 wireId2 segments2 ->
-            // Ensure wireId1 is less than wireId2 to avoid double counting
-            if wireId1 < wireId2 then
-                segments1 |> List.indexed
-                |> List.fold (fun acc3 (index1, seg1) ->
-                    let orientation1 = getSegmentOrientation index1 (model.Wire.Wires |> Map.find wireId1 |> fun wire -> wire.InitialOrientation)
-                    segments2 |> List.indexed
-                    |> List.fold (fun acc4 (index2, seg2) ->
-                        let orientation2 = getSegmentOrientation index2 (model.Wire.Wires |> Map.find wireId2 |> fun wire -> wire.InitialOrientation)
-                        // Only compare Horizontal with Vertical
-                        match orientation1, orientation2 with
-                        | Horizontal, Vertical ->
-                            if intersects seg1 seg2 then acc4 + 1 else acc4
-                        | Vertical, Horizontal ->
-                            if intersects seg2 seg1 then acc4 + 1 else acc4
-                        | _, _ -> acc4 // Ignore other combinations
-                    ) acc3
-                ) acc2
-            else acc2
-        ) acc1
-    ) 0 // Initial accumulator for the fold
+    // Function to check if segments are on the same net
+    let areSegmentsOnDifferentNet (segment1: ASegment) (segment2: ASegment) : bool =
+        let _, wireId1 = segment1.GetId
+        let _, wireId2 = segment2.GetId
+        let wire1 = Map.find wireId1 wires
+        let wire2 = Map.find wireId2 wires
+        wire1.OutputPort <> wire2.OutputPort
+    
+    // List of segments
+    let wireSegments = 
+        wires 
+        |> Map.values
+        |> Seq.collect (fun wire -> Seq.toList (getNonZeroAbsSegments wire))
+        |> List.ofSeq
+    
+    // Check the conditions on all pairs of segments
+    List.allPairs wireSegments wireSegments
+    |> List.filter (fun (seg1, seg2) -> 
+                        // Check intersection, right angle and that the segments are on different nets
+                        segmentsIntersect seg1 seg2 && 
+                        areSegmentsPerpendicular seg1 seg2 && 
+                        areSegmentsOnDifferentNet seg1 seg2
+                        )
+    |> List.distinct
+    |> List.length
+    |> (fun x -> x / 2) // Divide by two because each intersection was counted twice
 
 
 
@@ -290,7 +287,7 @@ let countRightAngleSegmentIntersections (model: SheetT.Model) : int =
 /// <summary>Counts the number of visible wire right-angles over the whole sheet.</summary>
 /// <param name="model">The sheet model to count for visible right-angles in wires.</param>
 /// <returns>The total number of visible wire right-angle.</returns>
-let getWireRightAngles (model: SheetT.Model) : int = 
+let countWireRightAngles (model: SheetT.Model) : int = 
     let getNumRightAngles (posList : XYPos list) : int = 
         List.length posList - 1
 
@@ -300,4 +297,5 @@ let getWireRightAngles (model: SheetT.Model) : int =
         let visibleSegmentsXY = getVisibleSegments wireId model
         getNumRightAngles visibleSegmentsXY)
     |> List.fold (+) 0
+
 
