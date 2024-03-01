@@ -1,0 +1,3 @@
+Team Work has been done in src/Renderer/DrawBlock/SheetBeautifyD2.fs
+
+I am tasked with completing the optimisation section of the sheetOrderFlip function. I have begun working on the start Algorithm for my section. I have implemented the initial structure that generates all permutations for gate inputs and all flipped states for MUX symbols. Further, a functio that takes the current model, generates all possible variations by applying gate permutations and MUX flips, and evaluates each variation to find the one with the fewest right-angle crossings whilst ensuring right angles are not increased.

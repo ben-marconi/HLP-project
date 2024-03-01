@@ -244,6 +244,7 @@ let countVisibleWireRightAngles (model: SheetT.Model) : int =
     |> Map.fold (fun acc _ wire -> acc + countRightAnglesInWire wire) 0
 /// Finds all segments that retarce and a list of all the end of wire segments  that retrace so
 /// far that the next segment (index = 3 or Segments.Length – 4) - starts inside a symbol.
+// T6R
 let findRetracingSegments (model: SheetT.Model) =
     // Checks if the end of a wire retraces into a symbol
     let isPointWithinBoundingBox (point: XYPos) (bbox: BoundingBox) =
