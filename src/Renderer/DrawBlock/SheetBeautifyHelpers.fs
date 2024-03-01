@@ -180,15 +180,18 @@ let countWireSegmentsIntersectingSymbols (model: SheetT.Model) : int =
             0
     sumIncludingPorts - ((model.Wire.Wires).Count * 2)
 
+/// Check whether segments are in the same net
 let segSameNetCheck seg1 seg2 model =
     let wire1 = model.Wire.Wires |> Map.find seg1.WireId
     let wire2 = model.Wire.Wires |> Map.find seg2.WireId
     wire1.OutputPort = wire2.OutputPort
 
+/// Checks whether semgents overlap
 let segOverlapCheck (seg1: ASegment) (seg2: ASegment) =
     overlap1D (seg1.Start.X, seg1.End.X) (seg2.Start.X, seg2.End.X)
     && overlap1D (seg1.Start.Y, seg1.End.Y) (seg2.Start.Y, seg2.End.Y)
 
+/// Checks whether segments are right angles. Avoids duplicates by matching false for reverse cases.
 let segRightAngleCheck (seg1: ASegment) (seg2: ASegment) =
     match seg1.Orientation, seg2.Orientation with
     | Horizontal, Vertical -> false
@@ -239,3 +242,68 @@ let countVisibleWireRightAngles (model: SheetT.Model) : int =
 
     model.Wire.Wires
     |> Map.fold (fun acc _ wire -> acc + countRightAnglesInWire wire) 0
+/// Finds all segments that retarce and a list of all the end of wire segments  that retrace so
+/// far that the next segment (index = 3 or Segments.Length – 4) - starts inside a symbol.
+let findRetracingSegments (model: SheetT.Model) =
+    // Checks if the end of a wire retraces into a symbol
+    let isPointWithinBoundingBox (point: XYPos) (bbox: BoundingBox) =
+        let inXRange =
+            point.X >= bbox.TopLeft.X
+            && point.X <= bbox.TopLeft.X + bbox.W
+        let inYRange =
+            point.Y >= bbox.TopLeft.Y
+            && point.Y <= bbox.TopLeft.Y
+        inXRange && inYRange
+    let endRetracesIntoSymbol wire =
+        let lastIndex = (List.length wire.Segments) - 1
+        let lastSegment = List.item lastIndex wire.Segments
+        let nextToLastIndex = lastIndex - 3
+        let nextToLastSegment = List.item nextToLastIndex wire.Segments
+        let startPos =
+            calculateAbsolutePositions wire model
+            |> List.head
+            |> fst
+        let endPos =
+            calculateAbsolutePositions wire model
+            |> List.last
+            |> snd
+        let symbolStartPosWithin =
+            model.Wire.Symbol.Symbols
+            |> Map.exists (fun _ symbol ->
+                let bbox = getSymbolBoundingBox symbol
+                isPointWithinBoundingBox startPos bbox
+                || isPointWithinBoundingBox endPos bbox)
+        (symbolStartPosWithin,
+         nextToLastSegment.Length < 0.0
+         || lastSegment.Length < 0.0)
+
+    // Finds retracing segments
+    let retracingSegments, endRetracingSegments =
+        model.Wire.Wires
+        |> Map.fold
+            (fun (retracing, endRetracing) _ wire ->
+                let zeroLengthIdxs =
+                    wire.Segments
+                    |> List.indexed
+                    |> List.choose (fun (idx, seg) ->
+                        if seg.Length = 0.0 then
+                            Some idx
+                        else
+                            None)
+                let retracingSegmentsForWire =
+                    zeroLengthIdxs
+                    |> List.choose (fun idx ->
+                        if idx > 0 && idx < List.length wire.Segments - 1 then
+                            let before = List.item (idx - 1) wire.Segments
+                            let after = List.item (idx + 1) wire.Segments
+                            if before.Length * after.Length < 0.0 then
+                                Some idx
+                            else
+                                None
+                        else
+                            None)
+                let endRetracingCheck = endRetracesIntoSymbol wire
+                (retracing @ retracingSegmentsForWire, endRetracing @ [ endRetracingCheck ]))
+            ([], [])
+
+    (retracingSegments, endRetracingSegments)
