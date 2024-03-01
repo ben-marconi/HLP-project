@@ -1,12 +1,10 @@
 ﻿module SheetBeautifyHelpers
-open Fable.Core
 open CommonTypes
 open DrawHelpers
 open DrawModelType
 open DrawModelType.SymbolT
 open DrawModelType.BusWireT
 open DrawModelType.SheetT
-open Fable.React
 open SheetUpdateHelpers
 open Optics
 open Operators
@@ -16,6 +14,10 @@ open EEExtensions
 
 open DrawModelType.SymbolT
 
+/// The visible segments of a wire, as a list of vectors, from source end to target end.
+/// Note that in a wire with n segments a zero length (invisible) segment at any index [1..n-2] is allowed 
+/// which if present causes the two segments on either side of it to coalesce into a single visible segment.
+/// A wire can have any number of visible segments - even 1.
 let getVisibleSegments (wId: ConnectionId) (model: SheetT.Model): XYPos list =
     let wire = model.Wire.Wires.[wId]
 
@@ -39,7 +41,12 @@ let getVisibleSegments (wId: ConnectionId) (model: SheetT.Model): XYPos list =
 
 
 
-// B1: Read/write the dimensions of a custom comp symbol
+// B1
+/// <summary> Read/write the dimensions of a custom component symbol. </summary>
+/// <param name="sym">The symbol to access or modify.</param>
+/// <returns>
+/// A lens for manipulating the component dimensions of the symbol.
+/// </returns>
 let customSymDim  =
     Lens.create
         (fun (sym : Symbol) ->
@@ -49,7 +56,11 @@ let customSymDim  =
         (fun (newH: float, newW: float) (sym: Symbol) ->
         {sym with HScale = Some (newH/sym.Component.H); VScale = Some (newW/sym.Component.W)})
 
-// B2: Write the position of a symbol on the sheet
+// B2
+/// <summary> Updates the position of a symbol on the sheet. </summary>
+/// <param name="updatedPos">The new position for the symbol.</param>
+/// <param name="symbol">The symbol to update.</param>
+/// <returns>The symbol with the updated position.</returns>
 let symbolPos (updatedPos: XYPos) (symbol: Symbol) : Symbol =
     { symbol with
         Pos = updatedPos
@@ -61,6 +72,9 @@ let symbolPos (updatedPos: XYPos) (symbol: Symbol) : Symbol =
     }
 
 // B3
+/// <summary> Provides read/write access to the order of ports on a specified side of a symbol. </summary>
+/// <param name="side">The side of the symbol to access the port order for.</param>
+/// <returns>A lens for manipulating the port order on a symbol's specific side.</returns>
 let symPortOrder (side: Edge) : Lens<Symbol, string list> = 
     Lens.create
         (fun symbol -> 
@@ -71,6 +85,8 @@ let symPortOrder (side: Edge) : Lens<Symbol, string list> =
             { symbol with PortMaps = { symbol.PortMaps with Order = Map.add side newOrder symbol.PortMaps.Order } })
 
 // B4
+/// <summary> Read/write the reversed state of the input ports of a MUX2 symbol. </summary>
+/// <remarks> Throws an exception if the symbol does not have reversed input ports defined. </remarks>
 let revMuxInput = 
     Lens.create
         (fun (symbol: Symbol) ->
@@ -81,12 +97,22 @@ let revMuxInput =
         )
 
 // B5
+/// <summary> Gets the position of a specified port on a symbol within the sheet.</summary>
+/// <param name="sym">The symbol containing the port.</param>
+/// <param name="port">The id of the port whose position is being queried.</param>
+/// <returns>The position of the port.</returns>
 let getPortPos (sym: Symbol) (port: Port) : XYPos =
     let TopLeftPos = sym.Pos
     let offset = getPortPos sym port
     { X = TopLeftPos.X + offset.X; Y = TopLeftPos.Y + offset.Y }
 
 // B6
+/// <summary>Returns the bounding box of a symbol's outline</summary>
+/// <param name="Pos">The symbol's initial position.</param>
+/// <param name="Component">Contains the height and weight of the component.</param>
+/// <param name="HScale">The scale of height.</param>
+/// <param name="VScale">The scale of width.</param>
+/// <returns>The bounding box of the symbol. </returns>
 let getBoundingBox ({ Pos = pos; Component = { W = w; H = h }; HScale = hScale; VScale = vScale } : Symbol) =
     {
         TopLeft = pos
@@ -95,6 +121,10 @@ let getBoundingBox ({ Pos = pos; Component = { W = w; H = h }; HScale = hScale; 
     }
 
 // B7
+/// <summary>Reads or writes the rotation state of a symbol.</summary>
+/// <param name="symbol">The symbol to modify or read the rotation from.</param>
+/// <param name="newRotation">The new rotation state to apply to the symbol.</param>
+/// <returns>The updated symbol with the new rotation state.</returns>
 let symRotation = 
     Lens.create
         (fun (symbol: Symbol) -> symbol.STransform.Rotation)
@@ -103,6 +133,10 @@ let symRotation =
         { symbol with STransform = newSTransform })
 
 // B8
+/// <summary>Reads or writes the flip state of a symbol.</summary>
+/// <param name="symbol">The symbol to modify or read the flip state from.</param>
+/// <param name="newFlip">The new flip state to apply to the symbol.</param>
+/// <returns>The updated symbol with the new flip state.</returns>
 let symFlip = 
     Lens.create
         (fun (symbol: Symbol) -> symbol.STransform.Flipped)
@@ -112,7 +146,9 @@ let symFlip =
 
 
 // T1
-// The number of pairs of symbols that intersect each other. See Tick3 for a related function. Count over all pairs of symbols.
+/// <summary>Counts the number of pairs of symbols that intersect each other on a sheet.</summary>
+/// <param name="sheet">The sheet model containing the symbols.</param>
+/// <returns>The total number of intersecting symbol pairs.</returns>
 let countIntersectingSymbolPairs (sheet: SheetT.Model) : int =
     let boxes =
         Map.values sheet.BoundingBoxes
@@ -126,6 +162,9 @@ let countIntersectingSymbolPairs (sheet: SheetT.Model) : int =
 
 
 // T2
+/// <summary>Counts the number of distinct wire visible segments that intersect with one or more symbols on a sheet.</summary>
+/// <param name="model">The sheet model containing the wires and symbols.</param>
+/// <returns>The sum of visible wire segment intersections with symbols.</returns>
 let countSegmentSymbolIntersections (model: SheetT.Model): int =
     let busWireModel = model.Wire  // Access the nested BusWireT.Model
     let convertToSegments wireId wire (posList: XYPos list) =
@@ -155,7 +194,9 @@ let countSegmentSymbolIntersections (model: SheetT.Model): int =
 
 
 // T3
-// The number of pairs of symbols that intersect each other. See Tick3 for a related function. Count over all pairs of symbols.
+/// <summary>Counts the number of distinct pairs of segments that cross each other at right angles on a sheet. Multiple functions used. The main function is countRightAngleIntersections.</summary>
+/// <param name="model">The sheet model for which to count the right angle segment intersections.</param>
+/// <returns>The total number of right angle intersections between segments.The length of a list</returns>
 let getSegmentOrientation (index: int) (initialOrientation: Orientation) : Orientation =
     match index % 2, initialOrientation with
     | 0, Horizontal | 1, Vertical -> Horizontal
@@ -209,7 +250,7 @@ let countRightAngleIntersections (model: SheetT.Model) : int =
 
 // T5
 /// <summary>Counts the number of visible wire right-angles over the whole sheet.</summary>
-/// <param name="model">The sheet model to count for visible right-angles in wires.</param>
+/// <param name="model">The sheet model to count for visible right-angles formed by wires.</param>
 /// <returns>The total number of visible wire right-angle.</returns>
 let countWireRightAngles (model: SheetT.Model) : int =
     let countRightAngles wireId = 
