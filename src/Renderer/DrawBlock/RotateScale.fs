@@ -1,4 +1,19 @@
-﻿module RotateScale
+﻿(* rz2621:work on functions from reSizeSymbolTopLevel to getBlock (line 174-303)
+
+Summary of Changes:
+1. In reSizeSymbolTopLevel, I apply pipeline to reduce unnecessary let and make it more readable(Transform 3).
+2. In tryWireSymOppEdge, I replace unnecessary match with a more concise if (Transform 1).
+3. In noSymbolOverlap, I simplify Map.filter and Map.isEmpty to Map.exists (Transform 1).
+4. In optimiseSymbol.folder, I simplify match by combining cases and using tuple patterns (Transform 1).
+5. In optimiseSymbol.scaledSymbol, I reconstruct pipeline format to make it more formal (Transform 3).
+6. In the last 2 lines of optimiseSymbol, I combine the complex line to a function with pipelines to make it more readable (Transform 3). 
+7. In getBlock, I create 2 helper functions getRightmostX and getBottommostY to avoid repeated calls of getRotatedHAndW (Transform1).
+
+Tranform:
+1. Functional Abstraction
+3. Pipelines
+*)
+module RotateScale
 open CommonTypes
 open DrawModelType
 open DrawModelType.SymbolT
@@ -156,13 +171,13 @@ let reSizeSymbol (wModel: BusWireT.Model) (symbolToSize: Symbol) (otherSymbol: S
 
 /// For UI to call ResizeSymbol.
 
-//Changed:Avoid unnecessary output and add pipelines
+//Changed:Add pipelines
 let reSizeSymbolTopLevel
     (wModel: BusWireT.Model)
     (symbolToSize: Symbol)
     (otherSymbol: Symbol)
     : BusWireT.Model =
-    // Removed the debug print statement for cleaner code
+    printfn $"ReSizeSymbol: ToResize:{symbolToSize.Component.Label}, Other:{otherSymbol.Component.Label}"
 
     let scaledSymbol = reSizeSymbol wModel symbolToSize otherSymbol
 
@@ -268,7 +283,7 @@ let optimiseSymbol
 /// <param name="symbols"> Selected symbols list</param>
 /// <returns>Bounding Box</returns>
 
-//Changed: Add helper functions getRightmostX and getBottommostY to avoid repeated calls to getRotatedHAndW
+//Changed: Add helper functions getRightmostX and getBottommostY to avoid repeated calls of getRotatedHAndW
 let getBlock 
         (symbols:Symbol List) :BoundingBox = 
 
