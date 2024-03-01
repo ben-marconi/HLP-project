@@ -155,30 +155,32 @@ let reSizeSymbol (wModel: BusWireT.Model) (symbolToSize: Symbol) (otherSymbol: S
         symbolToSize
 
 /// For UI to call ResizeSymbol.
+
+//Changed:Avoid unnecessary output and add pipelines
 let reSizeSymbolTopLevel
     (wModel: BusWireT.Model)
     (symbolToSize: Symbol)
     (otherSymbol: Symbol)
     : BusWireT.Model =
-    printfn $"ReSizeSymbol: ToResize:{symbolToSize.Component.Label}, Other:{otherSymbol.Component.Label}"
+    // Removed the debug print statement for cleaner code
 
     let scaledSymbol = reSizeSymbol wModel symbolToSize otherSymbol
 
-    let model' = Optic.set (symbolOf_ symbolToSize.Id) scaledSymbol wModel
-    BusWireSeparate.routeAndSeparateSymbolWires model' symbolToSize.Id
+    wModel
+    |> Optic.set (symbolOf_ symbolToSize.Id) scaledSymbol
+    |> fun updatedModel -> BusWireSeparate.routeAndSeparateSymbolWires updatedModel symbolToSize.Id
 
 /// For each edge of the symbol, store a count of how many connections it has to other symbols.
 type SymConnDataT =
     { ConnMap: Map<ComponentId * Edge, int> }
 
 /// If a wire between a target symbol and another symbol connects opposite edges, return the edge that the wire is connected to on the target symbol 
+//Changed:Simplify unnecessary matching
 let tryWireSymOppEdge (wModel: Model) (wire: Wire) (sym: Symbol) (otherSym: Symbol) =
     let symEdge = wireSymEdge wModel wire sym
     let otherSymEdge = wireSymEdge wModel wire otherSym
 
-    match symEdge = otherSymEdge.Opposite with
-    | true -> Some symEdge
-    | _ -> None
+    if symEdge = otherSymEdge.Opposite then Some symEdge else None
 
 let updateOrInsert (symConnData: SymConnDataT) (edge: Edge) (cid: ComponentId) =
     let m = symConnData.ConnMap
@@ -186,12 +188,14 @@ let updateOrInsert (symConnData: SymConnDataT) (edge: Edge) (cid: ComponentId) =
     { ConnMap = Map.add (cid, edge) count m }
 
 // TODO: this is copied from Sheet.notIntersectingComponents. It requires SheetT.Model, which is not accessible from here. Maybe refactor it.
-let noSymbolOverlap (boxesIntersect: BoundingBox -> BoundingBox -> bool) boundingBoxes sym =
+
+/// Checks if the given symbol's bounding box does not overlap with any other symbol's bounding box.
+//Changed: Simplify Map.filter and Map.isEmpty to Map.exists
+let noSymbolOverlap (boxesIntersect: BoundingBox -> BoundingBox -> bool) boundingBoxes (sym: Symbol) =
     let symBB = getSymbolBoundingBox sym
 
-    boundingBoxes
-    |> Map.filter (fun sId boundingBox -> boxesIntersect boundingBox symBB && sym.Id <> sId)
-    |> Map.isEmpty
+    not (Map.exists (fun sId boundingBox -> sId <> sym.Id && boxesIntersect boundingBox symBB) boundingBoxes)
+
 
 /// Finds the optimal size and position for the selected symbol w.r.t. to its surrounding symbols.
 let optimiseSymbol
@@ -231,17 +235,15 @@ let optimiseSymbol
             match noOverlap with
             | true -> true, resizedSym
             | _ -> false, sym
-
+        //Changed: Simplified match by combining cases and using tuple patterns.
         let folder (hAligned, vAligned, sym) ((cid, edge), _) =
-            let otherSym = Optic.get (symbolOf_ cid) wModel       
-
-            match hAligned, vAligned with
-            | false, _ when edge = Top || edge = Bottom ->
-                let hAligned', resizedSym = alignSym sym otherSym
-                (hAligned', vAligned, resizedSym)
-            | _, false when edge = Left || edge = Right ->
-                let vAligned', resizedSym = alignSym sym otherSym
-                (hAligned, vAligned', resizedSym)
+            match hAligned, vAligned, edge with
+            | false, _, (Top | Bottom) | _, false, (Left | Right) ->
+                let otherSym = Optic.get (symbolOf_ cid) wModel       
+                let aligned, resizedSym = alignSym sym otherSym
+                match edge with
+                | Top | Bottom -> (aligned, vAligned, resizedSym)
+                | _ -> (hAligned, aligned, resizedSym)
             | _ -> (hAligned, vAligned, sym)
 
         let (_, _, sym') = ((false, false, sym), symCount) ||> Array.fold folder
@@ -249,32 +251,41 @@ let optimiseSymbol
 
     let scaledSymbol =
         let symCount =
-            Map.toArray symConnData.ConnMap
+            symConnData.ConnMap
+            |> Map.toArray 
             |> Array.filter (fun (_, count) -> count > 1)
             |> Array.sortByDescending snd
 
         tryResize symCount symbol
-
-    let model' = Optic.set (symbolOf_ symbol.Id) scaledSymbol wModel
-    BusWireSeparate.routeAndSeparateSymbolWires model' symbol.Id
+    //Changed: Combine last 2 lines to pipeline. Make it more readable.
+    let updatedModel = 
+        Optic.set (symbolOf_ symbol.Id) scaledSymbol wModel
+        |> fun updatedWModel -> BusWireSeparate.routeAndSeparateSymbolWires updatedWModel symbol.Id
+    //Changed: Add a return function.
+    updatedModel
 
 /// <summary>HLP 23: AUTHOR Ismagilov - Get the bounding box of multiple selected symbols</summary>
 /// <param name="symbols"> Selected symbols list</param>
 /// <returns>Bounding Box</returns>
+
+//Changed: Add helper functions getRightmostX and getBottommostY to avoid repeated calls to getRotatedHAndW
 let getBlock 
         (symbols:Symbol List) :BoundingBox = 
 
-    let maxXsym = (List.maxBy (fun (x:Symbol) -> x.Pos.X+(snd (getRotatedHAndW x))) symbols)
-    let maxX = maxXsym.Pos.X + (snd (getRotatedHAndW maxXsym))
+    let getRightmostX sym =
+        let _, w = getRotatedHAndW sym
+        sym.Pos.X + w
+    
+    let getBottommostY sym =
+        let h, _ = getRotatedHAndW sym
+        sym.Pos.Y + h
 
-    let minX = (List.minBy (fun (x:Symbol) -> x.Pos.X) symbols).Pos.X
+    let maxX = symbols |> List.maxBy getRightmostX |> getRightmostX
+    let minX = symbols |> List.minBy (fun sym -> sym.Pos.X) |> fun sym -> sym.Pos.X
+    let maxY = symbols |> List.maxBy getBottommostY |> getBottommostY
+    let minY = symbols |> List.minBy (fun sym -> sym.Pos.Y) |> fun sym -> sym.Pos.Y
 
-    let maxYsym = List.maxBy (fun (x:Symbol) -> x.Pos.Y+(fst (getRotatedHAndW x))) symbols
-    let maxY = maxYsym.Pos.Y + (fst (getRotatedHAndW maxYsym))
-
-    let minY = (List.minBy (fun (x:Symbol) -> x.Pos.Y) symbols).Pos.Y
-
-    {TopLeft = {X = minX; Y = minY}; W = maxX-minX; H = maxY-minY}
+    { TopLeft = { X = minX; Y = minY }; W = maxX - minX; H = maxY - minY }
 
 
 /// <summary>HLP 23: AUTHOR Ismagilov - Takes a point Pos, a centre Pos, and a rotation type and returns the point flipped about the centre</summary>

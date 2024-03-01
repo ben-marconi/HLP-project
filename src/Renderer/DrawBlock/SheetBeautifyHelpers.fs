@@ -74,8 +74,8 @@ let B6 ({ Pos = pos; Component = { W = w; H = h }; HScale = hScale; VScale = vSc
 let B7 = 
     Lens.create
         (fun (symbol: Symbol) -> symbol.STransform.Rotation)
-        (fun (newrotation: Rotation) (symbol: Symbol) -> 
-        let newSTransform = {symbol.STransform with Rotation = newrotation}
+        (fun (newRotation: Rotation) (symbol: Symbol) -> 
+        let newSTransform = {symbol.STransform with Rotation = newRotation}
         { symbol with STransform = newSTransform })
 
 let B8 = 
