@@ -10,10 +10,19 @@ open DrawModelType.SheetT
 open SheetUpdateHelpers
 open Symbol
 open Optics
+open Optics.Optic
+open BlockHelpers
 
-// Function to read or write dimensions of a custom component symbol
 
-let readCustomSymbolDimensions (symbol: Symbol) = 
+/// <summary>
+/// B1R
+/// Reads the dimensions of a custom symbol, applying scaling factors if available.
+/// </summary>
+/// <param name="symbol">The symbol whose dimensions are to be read.</param>
+/// <returns>
+/// A tuple containing the width and height of the symbol after applying scaling factors.
+/// </returns>
+let readCustomSymbolDimensions (symbol: Symbol) : (float * float) = 
     let hScale = Option.defaultValue 1.0 symbol.HScale
     let vScale = Option.defaultValue 1.0 symbol.VScale
     let h = symbol.Component.H
@@ -22,26 +31,76 @@ let readCustomSymbolDimensions (symbol: Symbol) =
     let getHeight = vScale * h
     getWidth, getHeight
 
-let writeCustomSymbolDimensions (newW: float, newH: float) (symbol: Symbol) =
-    let getComponent = fst component_ symbol
-    let updatedComponent = snd w_ newW getComponent
-                        |> snd h_ newH
-    snd component_ updatedComponent symbol
-//B1
-let customSymbolDimensions = Lens.create 
+
+/// <summary>
+/// B1W
+/// Writes new dimensions to a custom symbol, updating the width and height.
+/// </summary>
+/// <param name="newW">The new width to be set.</param>
+/// <param name="newH">The new height to be set.</param>
+/// <param name="symbol">The symbol to be updated.</param>
+/// <returns>The updated symbol with the new dimensions.</returns>
+let writeCustomSymbolDimensions (newW: float, newH: float) (symbol: Symbol) : (Symbol) =
+    let getComponent = get component_ symbol
+    let updatedComponent = set w_ newW getComponent
+                        |> set h_ newH
+    set component_ updatedComponent symbol
+
+/// <summary>
+/// B1
+/// Lens for accessing and modifying the dimensions of a custom symbol.
+/// </summary>
+let customSymbolDimensions_ = Lens.create 
                                 (readCustomSymbolDimensions) (writeCustomSymbolDimensions)
 
-//B2
+/// <summary>
+/// B2
+/// Changes the position of a symbol to the specified coordinates.
+/// </summary>
+/// <param name="symbol">The symbol whose position is to be changed.</param>
+/// <param name="newPosition">The new coordinates for the symbol's position.</param>
+/// <returns>The updated symbol with the new position.</returns>
 let changeSymbolPosition (symbol: Symbol) (newPosition: XYPos) = 
-    snd posOfSym_ newPosition symbol
+    set posOfSym_ newPosition symbol
 
-//B3
-let getPortOrder (symbol: SymbolT.Symbol) () = "Not implemented yet"
-                                                
-    
+/// <summary>
+/// B3R
+/// Reads the order of ports on a specified side edge of a symbol.
+/// </summary>
+/// <param name="symbol">The symbol whose port order is to be read.</param>
+/// <param name="sideEdge">The side edge for which the port order is requested.</param>
+/// <returns>
+/// The order of ports on the specified side edge. Returns an empty list if the side edge is not found.
+/// </returns>
+let readPortOrder(symbol: Symbol) (sideEdge: Edge) = 
+    let portMap = get portMaps_ symbol
+    get order_ portMap
+    |> Map.tryFind sideEdge
+    |> Option.defaultValue []
+
+/// <summary>
+/// B3W
+/// Writes the order of ports on a specified side edge of a symbol.
+/// </summary>
+/// <param name="symbol">The symbol whose port order is to be modified.</param>
+/// <param name="portOrderList">The new order of ports on the specified side edge.</param>
+/// <param name="sideEdge">The side edge for which the port order is modified.</param>
+/// <returns>The updated symbol with the modified port order.</returns>
+let writePortOrder (symbol: Symbol) (portOrderList: string list) (sideEdge: Edge) =
+    let portMap = get portMaps_ symbol
+    let newPortMap = get order_ portMap
+                    |> Map.add sideEdge portOrderList
+    set portMaps_ (set order_ newPortMap portMap) symbol
+
+                                            
 
 
-//B4
+/// <summary>
+/// B4
+/// Lens for reading and writing the reversed input ports property of a symbol.
+/// </summary>
+/// <param name="symbol">The symbol to read from or write to.</param>
+/// <returns>The value indicating whether the input ports are reversed.</returns>
 let reverseInputPort_ = Lens.create (fun(symbol: Symbol) ->
                                             match symbol.ReversedInputPorts with
                                             | Some reversed -> reversed
@@ -51,39 +110,71 @@ let reverseInputPort_ = Lens.create (fun(symbol: Symbol) ->
                                             )
                                         
 
-//B5
+
+/// <summary>
+/// B5
+/// Retrieves the position of a port within the sheet model.
+/// </summary>
+/// <param name="model">The sheet model containing the port.</param>
+/// <param name="portId">The identifier of the port to retrieve the position for.</param>
+/// <returns>The position (location) of the specified port within the sheet model.</returns>
 let positionPortSheet (model: SheetT.Model) (portId: string) = 
     getPortLocation None model.Wire.Symbol portId                                         
 
 
-//B6
-let boundingBox (model: SheetT.Model) (symbol:Symbol) = 
+/// <summary>
+/// B6
+/// Retrieves the bounding box of a symbol within the sheet model.
+/// </summary>
+/// <param name="model">The sheet model containing the symbol.</param>
+/// <param name="symbol">The symbol for which to retrieve the bounding box.</param>
+/// <returns>
+/// The bounding box of the specified symbol within the sheet model, or None if the symbol is not found.
+/// </returns>
+let getSymbolBoundingBox (model: SheetT.Model) (symbol:Symbol) = 
     Map.tryFind symbol.Id model.BoundingBoxes
 
-//B7
+/// <summary>
+/// B7
+/// Lens for accessing or modifying the rotation state of a symbol.
+/// </summary>
 
 let rotationStateSymbol_ = Lens.create (fun(symbol: Symbol) -> symbol.STransform.Rotation)
                                     (fun(newRotation: Rotation) (symbol: Symbol) ->
                                         {symbol with STransform = ({symbol.STransform with Rotation = newRotation})})
 
-//B8
+/// <summary>
+/// B8
+/// Lens for accessing or modifying the flip state of a symbol.
+/// </summary>
 let flipStateSymbol_ = Lens.create (fun(symbol: Symbol) -> symbol.STransform.Flipped)
                                     (fun(newFlipped: bool) (symbol: Symbol) ->
                                         {symbol with STransform = ({symbol.STransform with Flipped = newFlipped})})
 
-
+/// <summary>
+/// Helper Funciton: Retrieves all symbol bounding boxes from the provided sheet model.
+/// </summary>
+/// <param name="model">The sheet model containing symbol bounding boxes.</param>
+/// <returns>
+/// A list of tuples where each tuple consists of a symbol identifier and its corresponding bounding box.
+/// </returns>
 let allSymbolBoundingBoxes (model: SheetT.Model) = 
     Map.values model.BoundingBoxes
     |> List.ofSeq
     |> List.mapi (fun id bb -> id, bb)
 
-//T1
+/// <summary>
+/// T1
+/// Counts the number of intersecting distinct pairs of symbols in the provided sheet model.
+/// </summary>
+/// <param name="model">The sheet model containing symbols and their bounding boxes.</param>
+/// <returns>The count of intersecting distinct symbol pairs.</returns>
 let intersectingDistinctSymbolPair (model: SheetT.Model): int =
     let symbolsBB = allSymbolBoundingBoxes model
 
     let isDifferentPair ((n1: int,_),(n2: int,_)) = n1 < n2
     let overlapBB ((_,bb1: BoundingBox), (_, bb2: BoundingBox)) = 
-        BlockHelpers.overlap2DBox bb1 bb2
+        overlap2DBox bb1 bb2
     
     List.allPairs symbolsBB symbolsBB
     |> List.filter isDifferentPair
@@ -91,7 +182,13 @@ let intersectingDistinctSymbolPair (model: SheetT.Model): int =
     |> List.length
 
 
-
+/// <summary>
+/// Helper Function from TestDrawBlock.fs
+/// Returns a list of XY vectors representing visible segments of a wire based on its initial orientation.
+/// </summary>
+/// <param name="wId">ConnectionId of the wire in the model.</param>
+/// <param name="model">The sheet model containing wires and segments.</param>
+/// <returns>List of XY vectors representing visible segments of the wire.</returns>
 let visibleSegments (wId: ConnectionId) (model: SheetT.Model): XYPos list =
 
     let wire = model.Wire.Wires[wId] // get wire from model
@@ -124,42 +221,6 @@ let visibleSegments (wId: ConnectionId) (model: SheetT.Model): XYPos list =
     |> List.mapi getSegmentVector
     |> coalesce
 
-// let visibleSegments (wId: ConnectionId) (model: SheetT.Model): (XYPos * XYPos) list =
-
-//     let wire = model.Wire.Wires[wId] // get wire from model
-
-//     /// helper to match even and odd integers in patterns (active pattern)
-//     let (|IsEven|IsOdd|) (n: int) = match n % 2 with | 0 -> IsEven | _ -> IsOdd
-
-//     /// Convert seg into its start and end points.
-//     /// index must be the index of seg in its containing wire.
-//     let getSegmentEndpoints (index:int) (seg: BusWireT.Segment) =
-//         let start = match index, wire.InitialOrientation with
-//                     | IsEven, BusWireT.Vertical | IsOdd, BusWireT.Horizontal -> seg.Start
-//                     | IsEven, BusWireT.Horizontal | IsOdd, BusWireT.Vertical -> seg.Start + {X=seg.Length; Y=0.}
-//         let endPos = start + 
-//                         match index, wire.InitialOrientation with
-//                         | IsEven, BusWireT.Vertical | IsOdd, BusWireT.Horizontal -> {X=0.; Y=seg.Length}
-//                         | IsEven, BusWireT.Horizontal | IsOdd, BusWireT.Vertical -> {X=seg.Length; Y=0.}
-//         (start, endPos)
-
-//     /// Return the list of segment endpoints with consecutive zero vectors coalesced
-//     let rec coalesce (segEndpoints: (XYPos * XYPos) list)  =
-//         match List.tryFindIndex (fun (_, endPos) -> endPos =~ XYPos.zero) segEndpoints[1..segEndpoints.Length-2] with          
-//         | Some zeroEndPosIndex ->
-//             let index = zeroEndPosIndex + 1 // base index as it should be on full segEndpoints
-//             segEndpoints[0..index-2] @
-//             [(fst (List.item (index-1) segEndpoints), snd (List.item (index+1) segEndpoints))] @
-//             segEndpoints[index+2..segEndpoints.Length - 1]
-//             |> coalesce
-//         | None -> segEndpoints
-    
-//     wire.Segments
-//     |> List.mapi getSegmentEndpoints
-//     |> coalesce
-
-
-
 let getVisibleSegments (wiresModel: BusWireT.Model) = 
     let getWires = wiresModel.Wires
 
@@ -173,45 +234,44 @@ let getVisibleSegments (wiresModel: BusWireT.Model) =
 
 
 
-
-//T2
-// let intersectingDistinctWiresandSymbols (model: SheetT.Model) = 
-//     let symbolsBB = allSymbolBoundingBoxes model |> List.map snd
-//     // symbolsBB
-//     // let wires = model.Wire
-//     // let a = List.map (fun bb ->BlockHelpers.getWiresInBox bb wires) symbolsBB
-//     // List.concat a
-//     let wIds = model.Wire.Wires |> Map.keys
-//     List.ofSeq wIds
-//     |> List.map (fun wId -> visibleSegments wId model)
-//     |> List.concat
-
     
-//T3
+/// <summary>
+/// T3
+/// Counts the number of right-angle intersections between segments of different wires in the sheet model.
+/// </summary>
+/// <param name="model">The sheet model containing wires and segments.</param>
+/// <returns>The count of right-angle intersections between segments of different wires.</returns>
 let segmentPairRightAngleCount (model: SheetT.Model) =
+    // Extract the wires from the model with their indices
     let wires = Map.values model.Wire.Wires
                 |> List.ofSeq
                 |> List.mapi (fun id wire -> id, wire)
     
+    // Helper function to get pairs of segments from two wires
     let getSegmentPairs w1 w2 = 
         let segs1 = BlockHelpers.getNonZeroAbsSegments w1
         let segs2 = BlockHelpers.getNonZeroAbsSegments w2
         List.allPairs segs1 segs2
 
-    let isRightAnglePair (seg1: ASegment) (seg2:ASegment) = 
+    // Check if two segments form a right-angle pair
+    let isRightAnglePair (seg1: ASegment) (seg2: ASegment) = 
         match seg1.Orientation, seg2.Orientation with
         | Horizontal, Vertical | Vertical, Horizontal -> true
         | _ -> false
     
+    // Check if two segments intersect
     let segmentIntersect seg1 seg2 =
         BlockHelpers.overlap1D (seg1.Start.X, seg1.End.X) (seg2.Start.X, seg2.End.X) &&
         BlockHelpers.overlap1D (seg1.Start.Y, seg1.End.Y) (seg2.Start.Y, seg2.End.Y)
 
-    let differentNet (w1:Wire) (w2:Wire) = 
+    // Check if two wires belong to different nets
+    let differentNet (w1: Wire) (w2: Wire) = 
         w1.OutputPort <> w2.OutputPort
         
+    // Check if two indices form a different pair
     let isDifferentPair ((n1: int,_),(n2: int,_)) = n1 < n2
 
+    // Get all pairs of wires
     List.allPairs wires wires
     |> List.filter isDifferentPair
     |> List.filter (fun (w1, w2) -> differentNet (snd w1) (snd w2))
@@ -220,16 +280,26 @@ let segmentPairRightAngleCount (model: SheetT.Model) =
     |> List.filter (fun (seg1, seg2) -> isRightAnglePair seg1 seg2 && segmentIntersect seg1 seg2)
     |> List.distinct
     |> List.length
-    
-//T5
-let visibleWireRightAngleCount (model:SheetT.Model) = 
+
+
+
+/// <summary>
+/// T5
+/// Counts the number of right-angle intersections between visible segments of different wires in the sheet model.
+/// </summary>
+/// <param name="model">The sheet model containing wires and segments.</param>
+/// <returns>The count of right-angle intersections between visible segments of different wires.</returns>
+let visibleWireRightAngleCount (model: SheetT.Model) = 
+    // Get the IDs of all wires in the model
     let wiresIds = Map.keys model.Wire.Wires |> List.ofSeq
     
-    let RightAngleCount =
+    // Calculate the total count of right-angle intersections for visible segments
+    let rightAngleCount =
         wiresIds
         |> List.fold (fun acc wId -> acc + List.length (visibleSegments wId model) - 1) 0
 
-    RightAngleCount
+    rightAngleCount
+
 
 
 //T4
@@ -244,11 +314,19 @@ let visibleSegmentLength (model: SheetT.Model) =
     |> List.fold (fun total_len len -> total_len + abs len.X + abs len.Y) 0.0
 
 
-
-//T6
+/// <summary>
+/// T6
+/// Finds segments in the model that have zero length and are part of retracing patterns.
+/// </summary>
+/// <param name="model">The sheet model containing wires and segments.</param>
+/// <returns>List of segments forming retracing patterns with zero length.</returns>
 let retracingSegments (model: SheetT.Model) =
+    // Get all wires from the model
     let wires = Map.values model.Wire.Wires |> List.ofSeq
+    // Get all absolute segments from all wires
     let getAllSegments = List.collect (fun wire -> BlockHelpers.getAbsSegments wire) wires
+
+    /// Helper function to determine retracing patterns with zero length
     let returnRetracingIndexes (segs1, segs2, segs3) =
         match segs2.Segment.Length with
         | 0.0 ->
@@ -258,12 +336,13 @@ let retracingSegments (model: SheetT.Model) =
             | lenPrev, lenNext when lenPrev > 0.0 && lenNext < 0.0 -> [segs2; segs3]
             | _ -> []
         | _ -> []
-    
+
+    // Find and collect segments forming retracing patterns with zero length
     let zeroLengthSegmentsWithRetracing =
         getAllSegments
         |> List.windowed 3
         |> List.collect (fun segs -> 
             returnRetracingIndexes (segs.[0], segs.[1], segs.[2])
         )
-    
+
     zeroLengthSegmentsWithRetracing

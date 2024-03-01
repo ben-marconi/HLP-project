@@ -13,6 +13,7 @@ open SheetUpdateHelpers
 open Sheet
 open SheetSnap
 open SheetDisplay
+open SymbolUpdate
 open Optics
 open FilesIO
 open FSharp.Core
@@ -189,8 +190,9 @@ let update (msg : Msg) (issieModel : ModelType.Model): ModelType.Model*Cmd<Model
         | Down -> mDownUpdate model mMsg
         | Drag -> 
             //printfn "running sheet.update"
-            printfn "Running Code: %A" <| SheetBeautifyHelpers.retracingSegments model
+            printfn "Running Code: %A" <| SheetBeautify.sheetAlignScale model
             mDragUpdate model mMsg
+            // SymbolUpdate.update mMsg model
         | Up -> mUpUpdate model mMsg
         | Move -> mMoveUpdate model mMsg
 
