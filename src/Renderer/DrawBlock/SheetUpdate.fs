@@ -24,7 +24,37 @@ module node = Node.Api
 
 importReadUart
 
+let visibleSegments (wId: ConnectionId) (model: SheetT.Model): XYPos list =
 
+    let wire = model.Wire.Wires[wId] // get wire from model
+
+    /// helper to match even and off integers in patterns (active pattern)
+    let (|IsEven|IsOdd|) (n: int) = match n % 2 with | 0 -> IsEven | _ -> IsOdd
+
+    /// Convert seg into its XY Vector (from start to end of segment).
+    /// index must be the index of seg in its containing wire.
+    let getSegmentVector (index:int) (seg: BusWireT.Segment) =
+        // The implicit horizontal or vertical direction  of a segment is determined by 
+        // its index in the list of wire segments and the wire initial direction
+        match index, wire.InitialOrientation with
+        | IsEven, BusWireT.Vertical | IsOdd, BusWireT.Horizontal -> {X=0.; Y=seg.Length}
+        | IsEven, BusWireT.Horizontal | IsOdd, BusWireT.Vertical -> {X=seg.Length; Y=0.}
+
+    /// Return the list of segment vectors with 3 vectors coalesced into one visible equivalent
+    /// wherever this is possible
+    let rec coalesce (segVecs: XYPos list)  =
+        match List.tryFindIndex (fun segVec -> segVec =~ XYPos.zero) segVecs[1..segVecs.Length-2] with          
+        | Some zeroVecIndex ->
+            let index = zeroVecIndex + 1 // base index as it should be on full segVecs
+            segVecs[0..index-2] @
+            [segVecs[index-1] + segVecs[index+1]] @
+            segVecs[index+2..segVecs.Length - 1]
+            |> coalesce
+        | None -> segVecs
+
+    wire.Segments
+    |> List.mapi getSegmentVector
+    |> coalesce
 
 
 
@@ -33,6 +63,11 @@ importReadUart
 let update (msg : Msg) (issieModel : ModelType.Model): ModelType.Model*Cmd<ModelType.Msg> =
     /// In this module model = Sheet model
     let model = issieModel.Sheet
+
+    let testVisibleSegments =
+        List.map (fun (w: Wire) -> visibleSegments w.WId model) (List.map snd (Map.toList model.Wire.Wires))
+
+    printfn "%A" testVisibleSegments
 
     /// check things that might not have been correctly completed in the last update and if so do them
     /// Mostly this is a hack to deal with the fact that dependent state is held separately rather than
