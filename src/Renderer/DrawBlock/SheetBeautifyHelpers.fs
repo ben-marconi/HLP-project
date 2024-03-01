@@ -198,7 +198,7 @@ let visibleSegments (wId: ConnectionId) (model: SheetT.Model): XYPos list =
 
     /// Convert seg into its XY Vector (from start to end of segment).
     /// index must be the index of seg in its containing wire.
-    let getSegmentVector (index:int) (seg: BusWireT.Segment) =
+    let getSegmentVector (index:int) (seg: BusWireT.Segment) : XYPos =
         // The implicit horizontal or vertical direction  of a segment is determined by 
         // its index in the list of wire segments and the wire initial direction
         match index, wire.InitialOrientation with
@@ -221,19 +221,6 @@ let visibleSegments (wId: ConnectionId) (model: SheetT.Model): XYPos list =
     |> List.mapi getSegmentVector
     |> coalesce
 
-let getVisibleSegments (wiresModel: BusWireT.Model) = 
-    let getWires = wiresModel.Wires
-
-    let getAllSegements : ASegment list = 
-        Map.values getWires
-        |> List.ofSeq
-        |> List.map (fun wire -> BlockHelpers.getAbsSegments wire)
-        |> List.concat
-
-    List.mapi (fun i seg -> i, seg) getAllSegements
-
-
-
     
 /// <summary>
 /// T3
@@ -241,7 +228,7 @@ let getVisibleSegments (wiresModel: BusWireT.Model) =
 /// </summary>
 /// <param name="model">The sheet model containing wires and segments.</param>
 /// <returns>The count of right-angle intersections between segments of different wires.</returns>
-let segmentPairRightAngleCount (model: SheetT.Model) =
+let segmentPairRightAngleCount (model: SheetT.Model) : int =
     // Extract the wires from the model with their indices
     let wires = Map.values model.Wire.Wires
                 |> List.ofSeq
@@ -289,7 +276,7 @@ let segmentPairRightAngleCount (model: SheetT.Model) =
 /// </summary>
 /// <param name="model">The sheet model containing wires and segments.</param>
 /// <returns>The count of right-angle intersections between visible segments of different wires.</returns>
-let visibleWireRightAngleCount (model: SheetT.Model) = 
+let visibleWireRightAngleCount (model: SheetT.Model) : int = 
     // Get the IDs of all wires in the model
     let wiresIds = Map.keys model.Wire.Wires |> List.ofSeq
     
@@ -302,17 +289,6 @@ let visibleWireRightAngleCount (model: SheetT.Model) =
 
 
 
-//T4
-
-let visibleSegmentLength (model: SheetT.Model) = 
-    let wires = Map.keys model.Wire.Wires
-                |> List.ofSeq
-                
-    let visibleWires = List.map (fun wId -> visibleSegments wId model) wires
-                                |> List.concat
-    visibleWires
-    |> List.fold (fun total_len len -> total_len + abs len.X + abs len.Y) 0.0
-
 
 /// <summary>
 /// T6
@@ -320,7 +296,7 @@ let visibleSegmentLength (model: SheetT.Model) =
 /// </summary>
 /// <param name="model">The sheet model containing wires and segments.</param>
 /// <returns>List of segments forming retracing patterns with zero length.</returns>
-let retracingSegments (model: SheetT.Model) =
+let retracingSegments (model: SheetT.Model) : ASegment list =
     // Get all wires from the model
     let wires = Map.values model.Wire.Wires |> List.ofSeq
     // Get all absolute segments from all wires
@@ -346,3 +322,32 @@ let retracingSegments (model: SheetT.Model) =
         )
 
     zeroLengthSegmentsWithRetracing
+
+
+/// <summary>
+/// Counts the number of wires intersecting with visible symbols on the sheet.
+/// </summary>
+/// <param name="model">The sheet model.</param>
+/// <returns>The count of wires intersecting with visible symbols.</returns>
+let intersectVisibleWireWithSymbolCount (model: SheetT.Model) : int =
+    let boundinBoxes = Map.values model.BoundingBoxes
+                        |> List.ofSeq  
+    List.collect (fun bb -> getWiresInBox bb model.Wire) boundinBoxes
+    |> List.length         
+
+
+/// <summary>
+/// T4
+/// Calculates the total length of visible segments in the sheet model.
+/// </summary>
+/// <param name="model">The sheet model containing wires and segments.</param>
+/// <returns>Total length of visible segments.</returns>
+let visibleSegmentLength (model: SheetT.Model) : float = 
+    let wires = Map.keys model.Wire.Wires
+                |> List.ofSeq
+                
+    let visibleWiresLength = List.collect (fun wId -> visibleSegments wId model) wires
+                                    |> List.fold (fun total_len len -> total_len + abs len.X + abs len.Y) 0.0
+    visibleWiresLength
+    
+
