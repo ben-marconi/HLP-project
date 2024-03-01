@@ -189,7 +189,7 @@ let update (msg : Msg) (issieModel : ModelType.Model): ModelType.Model*Cmd<Model
         | Down -> mDownUpdate model mMsg
         | Drag -> 
             //printfn "running sheet.update"
-            printfn "Running Code: %A" <| SheetBeautifyHelpers.visibleSegmentLength model
+            printfn "Running Code: %A" <| SheetBeautifyHelpers.zeroLenght model
             mDragUpdate model mMsg
         | Up -> mUpUpdate model mMsg
         | Move -> mMoveUpdate model mMsg

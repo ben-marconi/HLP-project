@@ -194,8 +194,8 @@ let segmentPairRightAngleCount (model: SheetT.Model) =
                 |> List.mapi (fun id wire -> id, wire)
     
     let getSegmentPairs w1 w2 = 
-        let segs1 = BlockHelpers.getAbsSegments w1
-        let segs2 = BlockHelpers.getAbsSegments w2
+        let segs1 = BlockHelpers.getNonZeroAbsSegments w1
+        let segs2 = BlockHelpers.getNonZeroAbsSegments w2
         List.allPairs segs1 segs2
 
     let isRightAnglePair (seg1: ASegment) (seg2:ASegment) = 
@@ -242,4 +242,71 @@ let visibleSegmentLength (model: SheetT.Model) =
                                 |> List.concat
     visibleWires
     |> List.fold (fun total_len len -> total_len + abs len.X + abs len.Y) 0.0
+
+
+//T6
+// let zeroLenght (model: SheetT.Model) =
+//     let wires = Map.values model.Wire.Wires
+//                 |> List.ofSeq
+                
+//     let getAllSegments = List.map (fun wire -> BlockHelpers.getAbsSegments wire) wires 
+//                                         |> List.concat
+//     let zeroLengthSegments = List.filter (fun seg -> seg.Segment.Length = 0.0 ) getAllSegments
+//     zeroLengthSegments
+//T6
+let retracingSegments (model: SheetT.Model) =
+    let wires = Map.values model.Wire.Wires |> List.ofSeq
+    let getAllSegments = List.map (fun wire -> BlockHelpers.getAbsSegments wire) wires |> List.concat
     
+    let zeroLengthSegmentsWithPrevious =
+        getAllSegments
+        |> List.windowed 2
+        |> List.collect (fun segs -> 
+        if segs.[0].Segment.Length = 0.0 && segs.[1].Segment.Length < 0.0 then 
+            [segs.[0]; segs.[1]] else [])
+            // |> List.filter (fun segs -> segs.[0].Segment.Length = 0.0 && segs.[1].Segment.Length < 0.0)
+            // |> List.map (fun segs -> segs.[0], segs.[1])
+        
+    zeroLengthSegmentsWithPrevious
+
+
+// let zeroLength (model: SheetT.Model) =
+//     let wires = Map.values model.Wire.Wires |> List.ofSeq
+//     let getAllSegments = List.map (fun wire -> BlockHelpers.getAbsSegments wire) wires |> List.concat
+
+//     let zeroLengthSegmentsWithNext =
+//         getAllSegments
+//         |> List.foldBack (fun seg (nextOpt, acc) ->
+//             if seg.Segment.Length = 0.0 && (nextOpt |> Option.map (fun next -> next.Segment.Length < 0.0) |> Option.defaultValue true) then
+//                 (Some seg, (seg, nextOpt) :: acc)
+//             else
+//                 (Some seg, acc)
+//         ) (None, []) // Initialize with the last element and an empty accumulator list
+//         |> snd // Extract the accumulator list
+
+//     zeroLengthSegmentsWithNext
+//     |> List.rev
+
+
+// let zeroLength (model: SheetT.Model) =
+//     let wires = Map.values model.Wire.Wires |> List.ofSeq
+//     let getAllSegments = List.map (fun wire -> BlockHelpers.getAbsSegments wire) wires |> List.concat
+
+//     let processSegment (seg: ASegment) acc =
+//         if seg.Segment.Length = 0.0 then
+//             match acc with
+//             | (Some prev, _, _) :: accRest -> (Some seg, seg, List.tryHead accRest) :: acc
+//             | _ -> (Some seg, seg, None) :: acc
+//         else
+//             (Some seg, None, None) :: acc
+
+//     let zeroLengthSegmentsWithNeighbors =
+//         getAllSegments
+//         |> List.foldBack processSegment []
+    
+//     zeroLengthSegmentsWithNeighbors
+//     |> List.map (fun (prevOpt, current, nextOpt) -> 
+//         match prevOpt, nextOpt with
+//         | Some prev, Some next -> (prev, current, next)
+//         | _, _ -> failwith "Unexpected pattern."
+//     )
