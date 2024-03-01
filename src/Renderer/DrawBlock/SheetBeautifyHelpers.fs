@@ -32,14 +32,16 @@ let getVisibleSegments (wId: ConnectionId) (model: SheetT.Model): XYPos list =
         /// Return a list of segment vectors with 3 vectors coalesced into one visible equivalent
         /// if this is possible, otherwise return segVecs unchanged.
         /// Index must be in range 1..segVecs
-        let tryCoalesceAboutIndex (segVecs: XYPos list) (index: int)  =
-            if segVecs[index] =~ XYPos.zero
-            then
-                segVecs[0..index-2] @
-                [segVecs[index-1] + segVecs[index+1]] @
-                segVecs[index+2..segVecs.Length - 1]
-            else
-                segVecs
+        let tryCoalesceAboutIndex (segVecs: XYPos list) (index: int) =
+                if index > 0 && index < segVecs.Length - 1 then
+                    if segVecs[index] =~ XYPos.zero then
+                        segVecs[0 .. index - 2]
+                        @ [ segVecs[index - 1] + segVecs[index + 1] ]
+                        @ segVecs[index + 2 .. segVecs.Length - 1]
+                    else
+                        segVecs
+                else
+                    segVecs
 
         wire.Segments
         |> List.mapi getSegmentVector

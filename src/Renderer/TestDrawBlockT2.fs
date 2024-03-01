@@ -37,10 +37,24 @@ let print x = printfn "%A" x
 /// <summary> Prints metrics related to wire intersections and right angles within a given sheet model. </summary>
 /// <param name="model">The sheet model to analyze.</param>
 let printMetrics (model : SheetT.Model) : unit =
-    let wireIntersections : int = countRightAngleSegmentIntersections model
-    let wireRightAngles : int = countRightAngleSegmentIntersections model // Change once function is fixed
+    // T1
+    let symbolPairIntersection : int = countIntersectingSymbolPairs model
+    print ($"Number of Symbol and Symbol Intersections: {symbolPairIntersection}")
     
+    // T2
+    let segmentSymbolIntersections : int = countSegmentSymbolIntersections model
+    print ($"Number of Symbol and Wire Intersections: {segmentSymbolIntersections}")
+
+    // T3
+    let wireIntersections : int = countRightAngleSegmentIntersections model
     print ($"Number of Wire Intersections: {wireIntersections}")
+    
+    // T4
+    let totalSegLength : int = totalSegmentLength model
+    print ($"Total Segment Length: {totalSegLength}")
+
+    // T5
+    let wireRightAngles : int = countWireRightAngles model
     print ($"Number of Wire Right angles: {wireRightAngles}")
 
 
@@ -138,7 +152,7 @@ let makeCircuit1 (symFlips : FlipType*FlipType*FlipType) =
         |> Result.bind (placeWire (portOf "S1" 0) (portOf "MUX2" 1))
         |> Result.bind (placeWire (portOf "S2" 0) (portOf "MUX2" 2))
         |> getOkOrFail
-
+    printMetrics model
     model
 
 // let makeCircuit2
