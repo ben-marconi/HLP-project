@@ -157,42 +157,40 @@ let countIntersectingSymbolPairs (sheet: SheetT.Model) : int =
 
 // T2 - Read the number of distinct wire visible segments that intersect with one or more symbols. Counter over all visible wire segments
 
-// let countWireSegmentsIntersectingSymbols (model: SheetT.Model) : int =
+let countWireSegmentsIntersectingSymbols (model: SheetT.Model) : int =
     
-//     let symbolsBoundingBoxes = 
-//         model.Wire.Symbol.Symbols 
-//         |> Map.values
-//         |> Seq.map getSymbolBoundingBox
-//         |> Seq.toList
+    let symbolsBoundingBoxes = 
+        model.Wire.Symbol.Symbols 
+        |> Map.values
+        |> Seq.map getSymbolBoundingBox
+        |> Seq.toList
 
-//     let segmentIntersectsAnySymbol (segmentStart: XYPos) (segmentEnd: XYPos) : bool =
-//         symbolsBoundingBoxes
-//         |> List.exists (fun bb -> 
-//             match BlockHelpers.segmentIntersectsBoundingBox bb segmentStart segmentEnd with
-//             | Some _ -> true
-//             | None -> false)
+    let segmentIntersectsAnySymbol (segmentStart: XYPos) (segmentEnd: XYPos) : bool =
+        symbolsBoundingBoxes
+        |> List.exists (fun bb -> 
+            match segmentIntersectsBoundingBox bb segmentStart segmentEnd with
+            | Some _ -> true
+            | None -> false)
 
-//     // NEEDS REVIEWING
-//     let getAbsoluteSegmentPositions (wire: BusWireT.Wire) (model: SheetT.Model) : (XYPos * XYPos) list =
-//         let startPos = wire.StartPos
-//         let segmentVectors = visibleSegments wire.WId model
+    let getAbsoluteSegmentPositions (wire: BusWireT.Wire) (model: SheetT.Model) : (XYPos * XYPos) list =
+        let startPos = wire.StartPos
+        let segmentVectors = visibleSegments wire.WId model
        
-//         segmentVectors
-//         |> List.fold (fun (acc, lastEnd) vec -> 
-//             let nextEnd = { X = lastEnd.X + vec.X; Y = lastEnd.Y + vec.Y }
-//             (acc @ [(lastEnd, nextEnd)], nextEnd)) ([], startPos) 
-//         |> fst 
+        segmentVectors
+        |> List.fold (fun (acc, lastEnd: XYPos) vec -> 
+            let nextEnd = { X = lastEnd.X + vec.X; Y = lastEnd.Y + vec.Y }
+            (acc @ [(lastEnd, nextEnd)], nextEnd)) ([], startPos) 
+        |> fst 
     
-//     model.Wire.Wires
-//     |> Map.fold (fun acc _ wire ->  
-//         let segmentPositions = getAbsoluteSegmentPositions wire model 
-//         let intersections = 
-//             segmentPositions
-//             |> List.pairwise
-//             |> List.fold (fun count (startPos, endPos) -> 
-//                 if segmentIntersectsAnySymbol startPos endPos then count + 1 else count) 0
+    model.Wire.Wires
+    |> Map.fold (fun acc _ wire ->  
+        let segmentPositions = getAbsoluteSegmentPositions wire model 
+        let intersections = 
+            segmentPositions
+            |> List.fold (fun count (startPos, endPos) -> 
+                if segmentIntersectsAnySymbol startPos endPos then count + 1 else count) 0
         
-//         acc + intersections) 0 
+        acc + intersections) 0 
 
 
 //getwiresandbox
@@ -228,9 +226,20 @@ let countRightAngleIntersectingSegments (model: SheetT.Model) =
 
     rightAngleIntersections.Length
 
-// T4
+// T4 - Read Sum of wiring segment length, counting only one when there are N same-net 
+// segments overlapping (this is the visible wire length on the sheet). Count over whole sheet. 
 
+let calcVisibleWireLengths (model: SheetT.Model) : float = 
+    let nets = partitionWiresIntoNets model.Wire
 
+    let calculateVectorLength (vector: XYPos) = abs(vector.X) + abs(vector.Y)
+    
+    let checkNetOverlaps (_, wire)=
+            wire
+            |> List.collect (fun (wID, _) -> visibleSegments wID model |> List.map calculateVectorLength)
+            |> List.sum 
+
+    nets |> List.fold (fun acc net -> acc + (checkNetOverlaps (net))) 0.0
 
 // T5 -  Read the number of visible wire right-angles. Count over the whole sheet
 
@@ -240,3 +249,5 @@ let countVisibleRightAngles (model: SheetT.Model) =
         let segments = visibleSegments wire.WId model
         let rightAnglesCount = if List.length segments > 0 then List.length segments-1 else 0 
         acc + rightAnglesCount) 0
+
+// is this right angles within one wire - check edstem -
