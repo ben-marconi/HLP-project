@@ -23,10 +23,10 @@ let symbolModel_ = symbol_
 
 
 /// Optic to access BusWireT.Model from SheetT.Model
-let busWireModel_ = SheetT.wire_
+let busWireModel_ = wire_
 
 /// allowed max X or y coord of svg canvas
-let maxSheetCoord = Sheet.Constants.defaultCanvasSize
+let maxSheetCoord = Constants.defaultCanvasSize
 let middleOfSheet = {X=maxSheetCoord/2.;Y=maxSheetCoord/2.}
 
 type SymbolPort = { Label: string; PortNumber: int }
@@ -67,9 +67,19 @@ let getConnectedSymbols (wireId: ConnectionId) (model: SheetT.Model) =
     
     sourceSymbol, targetSymbol
 
-/// Return a list of names and positions of either start component or from the end component
-let getCompPortNameAndPos (symbol: Symbol) (isInputWL: bool): string = 
-    failwithf "Not Implemented"
+/// Return a list of portIds and their respective positions given a component at either the start or end of a wire
+let getCompPortNameAndPos (sym: Symbol) (isInputWL: bool) (model: SheetT.Model) : (string * XYPos) list = 
+    let ports = 
+        if isInputWL then sym.Component.OutputPorts             
+        else sym.Component.InputPorts
+    
+    let portLabelAndPos (port: Port) = 
+        let portSheetPosition = portPos model port.Id
+        (port.Id, portSheetPosition)
+
+    ports
+    |> List.map portLabelAndPos 
+
 
 // SymLabel will be determined by the the port names at the symbols on each end of the wire
 // Position will be determined by the port locations on these symbols
@@ -116,6 +126,31 @@ let placeWire (source: SymbolPort) (target: SymbolPort) (model: SheetT.Model) : 
                 |> Ok
 
 
+let replaceWireWithLabelOnOutput (wireId: ConnectionId) (sym: Symbol) (model: SheetT.Model) = 
+    let wire = model.Wire.Wires.[wireId]
+    let portsList = getCompPortNameAndPos sym true model
+    
+    let placeWlAtPort (model: SheetT.Model) (portID: string , portPos: XYPos) = 
+        let wlPos = { X = portPos.X + 10.0; Y = portPos.Y}
+        match placeWireLabelSymbol portID wlPos model with 
+        | Ok updatedModel -> updatedModel
+        | Error errMsg -> 
+            printfn "Error: %s" errMsg
+            model
+
+    portsList 
+    |> List.fold placeWlAtPort model
+        
+        
+
+    
+
+// fun model (portID, portPos) ->
+        // let wlPos = { X = portPos.X + 10.0; Y = portPos.Y}
+        // match placeWireLabelSymbol portID wlPos model with
+        // | Ok updatedModel -> updatedModel
+        // | Error errMsg -> printfn "Error: %s" errMsg
+        //                   model)
 // ALTERNATIVE FUNCTION: If we decide that using visible segments is better in testing, this is the alternative to getWireLength
 // working with the visible segment coordinate outputs
 // /// Calculates the length of the visible wire
