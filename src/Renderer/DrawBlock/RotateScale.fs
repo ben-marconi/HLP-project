@@ -16,6 +16,46 @@ open SymbolResizeHelpers
     It requires better documentation of teh pasrts now used.
 *)
 
+
+//----------------------------------------------------------------------------------------------------------
+//----------------------------------------------------------------------------------------------------------
+// acs221 - allocated the section between and including oneCompBoundsBothEdges to scaleSymbol 
+// Summary of changes made
+
+// 1 -> Creation of findOutermostSymbols function
+// Having noticed repetitive code use within oneCompBoundsBothEdges and getScalingFactorAndOffsetCentreGroup I utilised structural abstraction and input wrapping to create a new function "findOutermostSymbols"
+// This function encapsulated the repetitive task of finding symbols with the largest and Smallest X and Y positions, adhering to the DRY (Don't Repeat Yourself) principle, elimating redundancy
+// Rather than copying the previous code, I have adapted the structure, creating two helper functions which again abstract common logic into reusable functions
+// By ensuring identifier names are thoughtful, consistent and descriptive (DUI principle), this addition also helps the code better meet the RSM and LFM principles.
+// Overall, these changed reduce unneccesary syntax complexity while improving te readability and clarity of both the code and its purpose
+
+// 2 -> OneCompBoundsBothEdges
+// OneCompBoundsBothEdges has been changed to integrate the new findOutermostSymbols function
+// Functional abstraction streamlines the code through the DRY principle
+// The now single pipelines have also been delineated to improve data flow clarity
+// As mentioned in (1), these changes improve code readability; the calculation steps within the function are more obvious
+
+// 3 -> getScalingFactorAndOffsetCentreGroup
+// Again, applied findOutermostSymbols to consolidate symbol boundary calculations to better meet DRY, RSN and LFM principles
+// Logic is clearer when reading, rather than a focus purely on calculations 
+// Additionally renamed function output identifiers to make them more informative; It now clearer how the function works upon intial inspection
+
+// 4 -> findSelectedSymbols
+// Changed Map.find to Map.tryFind in order to safely handle cases where the component Id is not present, which aligns with the NEP (No Exceptions Possible) principle
+// I then added an additional step "List.choose id" to handle any missing values and ensure the output type is the same as before (list<symbol> rather than list<option<Symbol>>)
+// This function was introduced to the pipeline (which I very slightly restructured) ensuring the RSN principle is met through code simplification
+
+// 5 -> ScaleSymbol
+// Renamed input parameter xYSC to xyScalingAndOffset for consistency with getScalingFactorAndOffsetCentreGroup's output
+// Also, directly decomposed the original xSC and ySC tuples, utilising DUI and removing the need for the "fst" and "snd" calls
+// Both these changes improve function readability 
+
+// 6 -> XML Documentation
+// Finally, I have added XML documentation, as stated in the coding guidlines, to the functions so that their purpose is clear and the code is more readable on a whole.
+
+//----------------------------------------------------------------------------------------------------------
+//----------------------------------------------------------------------------------------------------------
+
 /// Record containing all the information required to calculate the position of a port on the sheet.
 type PortInfo =
     { port: Port
@@ -511,44 +551,6 @@ let rotateBlock (compList:ComponentId list) (model:SymbolT.Model) (rotation:Rota
 // START acs221 - RotateScale improvements
 
 
-// CHANGES
-// Firstly, I have added XML comments to improve clarity so that the purpose of the function quickly obvious.
-// Additionally, I have restructured the function by adding two new local functions, centreWithLargestEdge and centreWithSmallestEdge.
-// Utilising structural abstraction, the purpose of these functions is to abstract the previous repetitive logic used in finding the max and min values of the symbol edges.
-// This change helps the code better meet the DRY (Don't Repeat Yourself) and LFM (Layout Follows Meaning) principles particularly.
-// Overall, by ensuring the new function names have thoughtful meaning, these changes enhance the readability, structure and clarity of the code.
-
-
-// /// <summary>
-// /// Determines whether one symbol bounds both edges of a given list of symbols along a particular direction, either horizontally or vertically.
-// /// </summary>
-// /// <param name="selectedSymbols">List of symbols for evaluation.</param>
-// /// <returns>True if any symbol bounds both edges of all others along either axis, otherwise, false</returns>
-// let oneCompBoundsBothEdges (selectedSymbols: Symbol list) = 
-//     let centreWithLargestEdge symbolEdge = 
-//         selectedSymbols
-//         |> List.maxBy symbolEdge
-//         |> getRotatedSymbolCentre
-        
-//     let centreWithSmallestEdge symbolEdge = 
-//         selectedSymbols
-//         |> List.minBy symbolEdge
-//         |> getRotatedSymbolCentre
-
-//     let maxXSymCentre = centreWithLargestEdge (fun sym -> sym.Pos.X + snd (getRotatedHAndW sym))
-//     let minXSymCentre = centreWithSmallestEdge (fun sym -> sym.Pos.X)
-//     let maxYSymCentre = centreWithLargestEdge (fun sym -> sym.Pos.Y + fst (getRotatedHAndW sym))
-//     let minYSymCentre = centreWithSmallestEdge (fun sym -> sym.Pos.Y)
-
-//     (maxXSymCentre.X = minXSymCentre.X) || (maxYSymCentre.Y = minYSymCentre.Y)
-
-
-// POSSIBLE ADAPTION --------------------------------
-
-
-// Seperation of concerns, reusability key words to use
-// MAKES NAMES MORE CONSISTENT WITH EACH OTHER TO EASIER TO SPOT THAT THEY ARE THE SAME IN BOTH FUNCTIONS
-
 /// <summary>
 /// Identifies the edge symbols within a list of symbols, along both X and Y axes
 /// </summary>
@@ -585,19 +587,31 @@ let oneCompBoundsBothEdges (selectedSymbols: Symbol list) : bool =
 
     (maxXSymCentre.X = minXSymCentre.X) || (maxYSymCentre.Y = minYSymCentre.Y)
 
+/// Retrieves a list of symbols from a model given a list of component ids.
 let findSelectedSymbols (compList: ComponentId list) (model: SymbolT.Model) = 
-    List.map (fun x -> model.Symbols |> Map.find x) compList
+    compList
+    |> List.map (fun x -> model.Symbols |> Map.tryFind x) 
+    |> List.choose id
 
+
+/// <summary>
+/// Calculates the scaling factor and offset centre based on given min/max values and the corresponding values to meet.
+/// </summary>
+/// <param name="originalMin">The original minimum value.</param>
+/// <param name="targetMin">The target minimum value to match.</param>
+/// <param name="originalMax">The original maximum value.</param>
+/// <param name="targetMax">The target maximum value to match.</param>
+/// <returns>A tuple consisting of the scaling factor and offset centre, respectively.</returns>
 let getScalingFactorAndOffsetCentre (min:float) (matchMin:float) (max:float) (matchMax:float) = 
     let scaleFact = 
-        if min = max || matchMax <= matchMin then 1. //checks the original range is not a single point and that the target range (matchMin to matchMac is larger than a point) - if either condition not met, no scaling used
-        else (matchMin - matchMax) / (min - max)     // ratio of target size to original size determines scaling
-    let offsetC =                                    // offset accounts for the scaling effect on positioning
+        if min = max || matchMax <= matchMin then 1. 
+        else (matchMin - matchMax) / (min - max)     
+    let offsetC =                                   
         if scaleFact = 1. then 0.
         else (matchMin - min * scaleFact) / (1.-scaleFact)  
     (scaleFact, offsetC)
 
-/// Return set of floats that define how a group of components is scaled
+/// Calculates the scaling factors and offsets required to fit a group of symbols within a specific bound box.
 let getScalingFactorAndOffsetCentreGroup
     (matchBBMin:XYPos)
     (matchBBMax:XYPos)
@@ -618,26 +632,21 @@ let getScalingFactorAndOffsetCentreGroup
     let oldMinY = (minYSym |>  getRotatedSymbolCentre).Y
     let newMinY = matchBBMin.Y + (fst (getRotatedHAndW minYSym))/2.
     
-    let xSC = getScalingFactorAndOffsetCentre oldMinX newMinX oldMaxX newMaxX
-    let ySC = getScalingFactorAndOffsetCentre oldMinY newMinY oldMaxY newMaxY
-    (xSC, ySC) 
+    let xScalingAndOffset = getScalingFactorAndOffsetCentre oldMinX newMinX oldMaxX newMaxX
+    let yScalingAndOffset = getScalingFactorAndOffsetCentre oldMinY newMinY oldMaxY newMaxY
+    (xScalingAndOffset, yScalingAndOffset) 
 
-//^^^^Rename xSC and ySC to be more clear 
 
-// Improved clarity of XML documentation
 
-/// Alter position of one symbol as needed in a scaling operation
+/// Alter position and size of one symbol based on the scaling factors and offset in both X and Y directions
 let scaleSymbol
-        (xYSC: (float * float) * (float * float))
+        (xyScalingAndOffset: (float * float) * (float * float))
         (sym: Symbol)
         : Symbol = 
     let symCentre =  getRotatedSymbolCentre sym
     let translateFunc scaleFact offsetC coordinate = (coordinate - offsetC) * scaleFact + offsetC
-    
-// renamed from xSC and ySC into the individual scale and offset names for better readability
-// - Parameter decomposition
-    let (xScale, xOffset) = fst xYSC
-    let (yScale, yOffset) = snd xYSC
+    let (xScale, xOffset) = fst xyScalingAndOffset
+    let (yScale, yOffset) = snd xyScalingAndOffset
     let newX = translateFunc (xScale) (xOffset) symCentre.X
     let newY = translateFunc (yScale) (yOffset) symCentre.Y
 
