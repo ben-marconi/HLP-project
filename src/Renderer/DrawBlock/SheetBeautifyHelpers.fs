@@ -164,82 +164,75 @@ let countWireSegmentsIntersectingSymbols (model: SheetT.Model) : int =
         0
 
 //ASegment.Orientation
-let countRightAngleCrossings (model: Model) : int =
-    // Get all segments with their absolute start and end positions
-    let allASegments =
+let countRightAngleIntersectingSegments (model: SheetT.Model) : int =
+    let allSegments =
         model.Wire.Wires
-        |> Map.fold
-            (fun acc _ wire ->
-                let rec calculatePositions (segs: Segment list) (currentPos: XYPos) (acc: ASegment list) =
-                    match segs with
-                    | [] -> acc
-                    | seg :: tail when not seg.IsZero ->
-                        let newPos =
-                            match wire.InitialOrientation with
-                            | Horizontal when seg.Index % 2 = 0 -> { X = currentPos.X + seg.Length; Y = currentPos.Y }
-                            | Vertical when seg.Index % 2 = 1 -> { X = currentPos.X; Y = currentPos.Y + seg.Length }
-                            | _ -> currentPos
-                        calculatePositions
-                            tail
-                            newPos
-                            ({ Start = currentPos; End = newPos; Segment = seg }
-                             :: acc)
-                    | _ :: tail -> calculatePositions tail currentPos acc
-                calculatePositions wire.Segments wire.StartPos [])
-            []
+        |> Map.fold (fun acc _ wire -> acc @ calculatePositions wire) []
 
-    let doIntersect (aSeg: ASegment) (bSeg: ASegment) : bool =
-        let aOrientation = aSeg.Orientation
-        let bOrientation = bSeg.Orientation
-        match aOrientation, bOrientation with
-        | Horizontal, Vertical ->
-            aSeg.Start.Y >= (min bSeg.Start.Y bSeg.End.Y)
-            && aSeg.Start.Y <= (max bSeg.Start.Y bSeg.End.Y)
-            && bSeg.Start.X >= (min aSeg.Start.X aSeg.End.X)
-            && bSeg.Start.X <= (max aSeg.Start.X aSeg.End.X)
+    let segmentsIntersectAtRightAngles (seg1: ASegment) (seg2: ASegment) =
+        match seg1.Orientation, seg2.Orientation with
+        | Horizontal, Vertical
         | Vertical, Horizontal ->
-            aSeg.Start.X >= (min bSeg.Start.X bSeg.End.X)
-            && aSeg.Start.X <= (max bSeg.Start.X bSeg.End.X)
-            && bSeg.Start.Y >= (min aSeg.Start.Y aSeg.End.Y)
-            && bSeg.Start.Y <= (max aSeg.Start.Y aSeg.End.Y)
+            let horizontalSegment =
+                if seg1.Orientation = Horizontal then
+                    seg1
+                else
+                    seg2
+            let verticalSegment =
+                if seg1.Orientation = Vertical then
+                    seg1
+                else
+                    seg2
+            // Check for overlap in both dimensions
+            overlap1D
+                (horizontalSegment.Start.Y, horizontalSegment.End.Y)
+                (verticalSegment.Start.Y, verticalSegment.End.Y)
+            && overlap1D
+                (horizontalSegment.Start.X, horizontalSegment.End.X)
+                (verticalSegment.Start.X, verticalSegment.End.X)
         | _ -> false
 
-    let segmentPairs =
-        allASegments
-        |> List.collect (fun aSeg ->
-            allASegments
-            |> List.choose (fun bSeg ->
-                if aSeg.Segment.WireId <> bSeg.Segment.WireId then
-                    Some(aSeg, bSeg)
-                else
-                    None))
-
-    segmentPairs
-    |> List.filter (fun (aSeg, bSeg) -> doIntersect aSeg bSeg)
+    // Check for intersections between all unique pairs of segments
+    allSegments
+    |> List.collect (fun seg1 -> allSegments |> List.map (fun seg2 -> seg1, seg2))
+    |> List.filter (fun (seg1, seg2) ->
+        // Ensure we're not comparing a segment with itself
+        seg1.Segment.Index <> seg2.Segment.Index
+        || seg1.Segment.WireId <> seg2.Segment.WireId)
+    |> List.filter (fun (seg1, seg2) -> segmentsIntersectAtRightAngles seg1 seg2)
     |> List.length
 
-let sumOfWireSegmentsLength (model: SheetT.Model) : float =
-    // Function to calculate the length of a segment from its start and end points
-    let segmentLength ((startPos, endPos): XYPos * XYPos) =
+let sumOfUniqueWireSegmentsLengths (model: SheetT.Model) : float =
+    let segmentLength (startPos: XYPos, endPos: XYPos) =
         let dx = endPos.X - startPos.X
         let dy = endPos.Y - startPos.Y
         sqrt (dx * dx + dy * dy)
 
-    // Retrieve all segments' absolute positions and calculate their lengths
-    let allSegmentsLengths =
+    let segmentIdentifier (startPos: XYPos, endPos: XYPos) =
+        if startPos.X = endPos.X then
+            sprintf "V%f[%f,%f]" startPos.X (min startPos.Y endPos.Y) (max startPos.Y endPos.Y)
+        else
+            sprintf "H%f[%f,%f]" startPos.Y (min startPos.X endPos.X) (max startPos.X endPos.X)
+
+    let addUniqueSegment (acc: (string * float) list) (segment: (XYPos * XYPos)) =
+        let id = segmentIdentifier segment
+        let len = segmentLength segment
+        if
+            acc
+            |> List.exists (fun (existingId, _) -> existingId = id)
+        then
+            acc
+        else
+            (id, len) :: acc
+
+    let uniqueSegmentsLengths =
         model.Wire.Wires
         |> Map.fold
             (fun acc _ wire ->
                 let segmentPositions = calculateAbsolutePositions wire model
-                let lengths = segmentPositions |> List.map segmentLength
-                acc @ lengths)
+                List.fold addUniqueSegment acc segmentPositions)
             []
-
-    // Sum the lengths, ensuring that identical lengths (from overlapping segments) are counted only once
-    allSegmentsLengths
-    |> Seq.countBy id // Group by identical lengths
-    |> Seq.map snd // Take the counts
-    |> Seq.sum // Sum the lengths
+    uniqueSegmentsLengths |> List.map snd |> List.sum
 
 let countVisibleWireRightAngles (model: Model) : int =
     let countRightAnglesInWire (wire: Wire) : int =
