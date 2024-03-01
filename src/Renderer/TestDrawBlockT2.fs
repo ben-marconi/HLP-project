@@ -31,16 +31,23 @@ open TestLib
 //-----------------------------------------------------Helper Functions-----------------------------------------------------//
 //--------------------------------------------------------------------------------------------------------------------------//
 
+// Function to print any value
 let print x = printfn "%A" x
 
-/// <summary>
-/// Finds the ID of a symbol within a model by its label.
-/// </summary>
+/// <summary> Prints metrics related to wire intersections and right angles within a given sheet model. </summary>
+/// <param name="model">The sheet model to analyze.</param>
+let printMetrics (model : SheetT.Model) : unit =
+    let wireIntersections : int = countRightAngleSegmentIntersections model
+    let wireRightAngles : int = countRightAngleSegmentIntersections model // Change once function is fixed
+    
+    print ($"Number of Wire Intersections: {wireIntersections}")
+    print ($"Number of Wire Right angles: {wireRightAngles}")
+
+
+/// <summary> Finds the ID of a symbol within a model by its label. </summary>
 /// <param name="model">The sheet model containing the symbols.</param>
 /// <param name="targetLabel">The label of the symbol to find.</param>
-/// <returns>
-/// The ID of the symbol if found, wrapped in an Option type; otherwise, None.
-/// </returns>
+/// <returns> The ID of the symbol if found, wrapped in an Option type; otherwise, None. </returns>
 let findSymbolIdByLabel (model: SheetT.Model) (targetLabel: string) : Option<ComponentId> =
     model.Wire.Symbol.Symbols
     |> Map.toSeq 
@@ -48,40 +55,46 @@ let findSymbolIdByLabel (model: SheetT.Model) (targetLabel: string) : Option<Com
     |> Option.map fst 
 
 
-/// <summary>
-/// Flips a symbol within the model based on the specified orientation.
-/// </summary>
+/// <summary> Flips a symbol within the model based on the specified orientation. </summary>
 /// <param name="symLabel">The label of the symbol to flip.</param>
 /// <param name="orientation">The orientation to flip the symbol to.</param>
 /// <param name="model">The current sheet model containing the symbol.</param>
-/// <returns>
-/// A Result containing the updated model if the symbol is found and flipped, or the original model if the symbol is not found.
-/// </returns>
+/// <returns> A Result containing the updated model if the symbol is found and flipped, or the original model if the symbol is not found.</returns>
 let flipSymbol (symLabel: string) (orientation: FlipType) (model : SheetT.Model) : Result<SheetT.Model, string> =
     match findSymbolIdByLabel model symLabel with
     | Some(id) ->
         let sym = model.Wire.Symbol.Symbols[id]
-        let updatedSym = flipSymbol orientation sym
+        let updatedSym = SymbolResizeHelpers.flipSymbol orientation sym
         let updatedSymbols = Map.add id updatedSym model.Wire.Symbol.Symbols
         let newModel = { model with Wire = { model.Wire with Symbol = { model.Wire.Symbol with Symbols = updatedSymbols } } }
         Ok newModel
     | None -> Ok model 
 
 
-/// <summary>
-/// Prints metrics related to wire intersections and right angles within a given sheet model.
-/// </summary>
-/// <param name="model">The sheet model to analyze.</param>
-/// <remarks>
-/// This function calculates and prints the number of wire intersections and the number of wire right angles in the model.
-/// Both metrics are obtained using the SheetBeautifyHelpers module.
-/// </remarks>
-let printMetrics (model : SheetT.Model) : unit =
-    let wireIntersections : int = countRightAngleSegmentIntersections model
-    let wireRightAngles : int = countRightAngleSegmentIntersections model
+// Placeholder for actual implementation
+let beautify (model : SheetT.Model) : SheetT.Model = 
+    model
+
+/// <summary> Beautifies the given sheet within the model then updates and displays the new sheet. Prints metrics before and after changes. </summary>
+/// <param name="model">The model containing the sheet to be beautified.</param>
+/// <param name="dispatch"> dispatch</param>
+let beautifySheet (model : ModelType.Model) (dispatch: Dispatch<Msg>): unit = 
+    // Use optic to get sheet
+    let sheet = Optic.get sheet_ model
     
-    print ($"Number of Wire Intersections: {wireIntersections}")
-    print ($"Number of Wire Right angles: {wireRightAngles}")
+    // Print metrics for current Sheet
+    print "Metrics before beautifying"
+    printMetrics sheet
+    
+    // Beautify sheet and print new metrics
+    let newSheet = beautify sheet
+    print "Metrics after beautifying"
+    printMetrics newSheet
+
+    // Update the Model with the new sheet and display it
+    let newModel = Optic.set sheet_ newSheet model
+    showSheetInIssieSchematic newModel.Sheet dispatch
+
 
 
 //--------------------------------------------------------------------------------------------------------------------------//
@@ -106,7 +119,7 @@ let flipTypePairs = product (fun a b -> (a, b)) flipTypeGen flipTypeGen
 let flipTypeTriples = product (fun (a, b) c -> (a, b, c)) flipTypePairs flipTypeGen
 
 
-
+// Generate a circuit with 2 inputs, 2 Mux2 and one and gate with random flips
 let makeCircuit1 (symFlips : FlipType*FlipType*FlipType) =
     let flipMUX1, flipMUX2, flipGate = symFlips 
     let model = 
@@ -126,7 +139,6 @@ let makeCircuit1 (symFlips : FlipType*FlipType*FlipType) =
         |> Result.bind (placeWire (portOf "S2" 0) (portOf "MUX2" 2))
         |> getOkOrFail
 
-    printMetrics model
     model
 
 // let makeCircuit2
@@ -157,7 +169,7 @@ let testsToRunFromSheetMenu : (string * (int -> int -> Dispatch<Msg> -> Unit)) l
         "Test5", fun _ _ _ -> printf "Test5" // dummy test - delete line or replace by real test as needed
         "Test6", fun _ _ _ -> printf "Test6"
         "Test7", fun _ _ _ -> printf "Test7"
-        "Test8", fun _ _ _ -> printf "Test8"
+        "Run Beautify Function", fun _ _ _ -> printf "Running beautify algorithm"
         "Next Test Error", fun _ _ _ -> printf "Next Error:" // Go to the nexterror in a test
 
     ]
@@ -170,6 +182,10 @@ let testMenuFunc (testIndex: int) (dispatch: Dispatch<Msg>) (model: Model) =
                 nextError testsToRunFromSheetMenu[state.LastTestNumber] (state.LastTestSampleIndex+1) dispatch
             | "Next Test Error", None ->
                 printf "Test Finished"
+                ()
+            | "Run Beautify Function", _ ->
+                printf "Test Finished"
+                beautifySheet model dispatch
                 ()
             | _ ->
                 func testIndex 0 dispatch
