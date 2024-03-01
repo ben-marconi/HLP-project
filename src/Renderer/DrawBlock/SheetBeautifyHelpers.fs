@@ -1,4 +1,5 @@
 ﻿module SheetBeautifyHelpers
+open BlockHelpers
 open CommonTypes
 open DrawHelpers
 open DrawModelType
@@ -247,6 +248,12 @@ let countRightAngleIntersections (model: SheetT.Model) : int =
         | _ -> false
     )
     |> Seq.length
+
+// T4 still needs working.
+
+
+
+
 
 // T5
 /// <summary>Counts the number of visible wire right-angles over the whole sheet.</summary>
