@@ -2,7 +2,6 @@
 open GenerateData
 open Elmish
 
-
 //-------------------------------------------------------------------------------------------//
 //--------Types to represent tests with (possibly) random data, and results from tests-------//
 //-------------------------------------------------------------------------------------------//
@@ -329,6 +328,7 @@ module HLPTick3 =
         fromList [-100..20..100]
         |> map (fun n -> middleOfSheet + {X=float n; Y=0.})
 
+
     /// demo test circuit consisting of a DFF & And gate
     let makeTest1Circuit (andPos:XYPos) =
         initSheetModel
@@ -339,10 +339,58 @@ module HLPTick3 =
         |> getOkOrFail
 
 
-    let makeTest2Circuit (andPos:XYPos) =
-        makeTest1Circuit andPos
-        |> placeSymbol "LBLAAAAA" IOLabel andPos
-        |> getOkOrFail
+//------------------------------------------------------------------------------------------------//
+//------------------------------------D3 Testing Functions----------------------------------------//
+//------------------------------------------------------------------------------------------------//
+    module D3Testing =
+        open SheetBeautifyHelpers
+
+        let makeLabelTest1Circuit labelPosition =
+            initSheetModel
+            |> placeSymbol "G1" (GateN(And,2)) (middleOfSheet + {X = -100; Y = 0})
+            |> Result.bind (placeSymbol "FF1" DFF middleOfSheet)
+            |> Result.bind (placeWire (portOf "G1" 0) (portOf "FF1" 0))
+            |> Result.bind (placeWire (portOf "FF1" 0) (portOf "G1" 0) )
+            |> Result.bind (placeSymbol "LBL1" IOLabel labelPosition)
+            |> getOkOrFail
+
+        let makeLabelTest2Circuit labelPosition =
+            initSheetModel
+            |> placeSymbol "DMUX1" (Demux4) (middleOfSheet + {X = -100; Y = 0})
+            |> Result.bind (placeSymbol "MUX1" Mux4 middleOfSheet)
+            |> Result.bind (placeWire (portOf "DMUX1" 0) (portOf "MUX1" 0))
+            |> Result.bind (placeWire (portOf "DMUX1" 1) (portOf "MUX1" 1))
+            |> Result.bind (placeWire (portOf "DMUX1" 2) (portOf "MUX1" 2))
+            |> Result.bind (placeWire (portOf "DMUX1" 3) (portOf "MUX1" 3))
+            |> Result.bind (placeSymbol "LBL1" IOLabel labelPosition)
+            |> Result.bind (placeWire (portOf "MUX1" 0) (portOf "LBL1" 0))
+            |> getOkOrFail
+
+
+        let failOnLabelIntersectionWithWire (sample: int) (sheet: SheetT.Model) =
+            let intersections = countWireLabelIntersections sheet
+            if intersections = 0 then
+                None
+            else
+                Some $"Wire intersects a wire label in Sample {sample}"
+
+        /// <summary>
+        /// Generates a list of positions in a grid filtering any positions that will cause an intersect
+        /// </summary>
+        /// <param name="min"></param>
+        /// <param name="step"></param>
+        /// <param name="max"></param>
+        /// <param name="circuit">Function that generates the circuit model</param>
+        let gridLabelPositionsWithoutIntersect min step max circuit =
+            List.allPairs [min..step..max] [ min..step..max]
+                |> List.map (fun (x,y) -> middleOfSheet + {X=float x; Y=float y})
+                |> List.filter (fun (pos) ->
+                    let c = circuit pos
+                    (countSymbolIntersections c)= 0
+                    )
+                |> fromList
+
+
 
 
 //------------------------------------------------------------------------------------------------//
@@ -395,6 +443,8 @@ module HLPTick3 =
 
     module Tests =
 
+
+
         /// Allow test errors to be viewed in sequence by recording the current error
         /// in the Issie Model (field DrawblockTestState). This contains all Issie persistent state.
         let recordPositionInTest (testNumber: int) (dispatch: Dispatch<Msg>) (result: TestResult<'a>) =
@@ -413,7 +463,7 @@ module HLPTick3 =
                 "Horizontally positioned AND + DFF: fail on sample 0"
                 firstSample
                 horizLinePositions
-                makeTest2Circuit
+                makeTest1Circuit
                 (Asserts.failOnSampleNumber 0)
                 dispatch
             |> recordPositionInTest testNum dispatch
@@ -451,6 +501,16 @@ module HLPTick3 =
                 dispatch
             |> recordPositionInTest testNum dispatch
 
+        let test5 testNum firstSample dispatch =
+            runTestOnSheets
+                "Label Test 1"
+                firstSample
+                (D3Testing.gridLabelPositionsWithoutIntersect -200 20 150 D3Testing.makeLabelTest2Circuit)
+                D3Testing.makeLabelTest2Circuit
+                Asserts.failOnAllTests//D3Testing.failOnLabelIntersectionWithWire
+                dispatch
+            |> recordPositionInTest testNum dispatch
+
         /// List of tests available which can be run ftom Issie File Menu.
         /// The first 9 tests can also be run via Ctrl-n accelerator keys as shown on menu
         let testsToRunFromSheetMenu : (string * (int -> int -> Dispatch<Msg> -> Unit)) list =
@@ -461,7 +521,7 @@ module HLPTick3 =
                 "Test2", test2 // example
                 "Test3", test3 // example
                 "Test4", test4
-                "Test5", fun _ _ _ -> printf "Test5" // dummy test - delete line or replace by real test as needed
+                "Test5", test5 // dummy test - delete line or replace by real test as needed
                 "Test6", fun _ _ _ -> printf "Test6"
                 "Test7", fun _ _ _ -> printf "Test7"
                 "Test8", fun _ _ _ -> printf "Test8"
@@ -490,8 +550,6 @@ module HLPTick3 =
                 ()
             | _ ->
                 func testIndex 0 dispatch
-
-
 
 
 
