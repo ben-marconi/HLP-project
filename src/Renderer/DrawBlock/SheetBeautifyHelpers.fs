@@ -16,6 +16,28 @@ open EEExtensions
 
 open DrawModelType.SymbolT
 
+let getVisibleSegments (wId: ConnectionId) (model: SheetT.Model): XYPos list =
+    let wire = model.Wire.Wires.[wId]
+
+    let getSegmentVector index seg =
+        match index % 2, wire.InitialOrientation with
+        | 0, BusWireT.Vertical | 1, BusWireT.Horizontal -> { X = 0.; Y = seg.Length }
+        | _ -> { X = seg.Length; Y = 0. }
+
+    let rec coalesceSegments vectors acc index =
+        match vectors with
+        | prev :: zeroLength :: next :: tail when zeroLength = XYPos.zero ->
+            let combined = prev + next
+            coalesceSegments (combined :: tail) (acc @ [prev]) (index + 2)
+        | head :: tail -> coalesceSegments tail (acc @ [head]) (index + 1)
+        | [] -> acc
+
+    wire.Segments
+    |> List.indexed
+    |> List.map (fun (index, seg) -> getSegmentVector index seg)
+    |> fun vectors -> coalesceSegments vectors [] 0
+
+
 
 // B1: Read/write the dimensions of a custom comp symbol
 let customSymDim  =
@@ -103,6 +125,35 @@ let countIntersectingSymbolPairs (sheet: SheetT.Model) : int =
     |> List.length
 
 
+// T2
+let countSegmentSymbolIntersections (model: SheetT.Model): int =
+    let busWireModel = model.Wire  // Access the nested BusWireT.Model
+    let convertToSegments wireId wire (posList: XYPos list) =
+        posList |> List.mapi (fun idx pos ->
+            { Index = idx; 
+              Length = if pos.X <> 0.0 then pos.X else pos.Y; 
+              WireId = wireId; 
+              IntersectOrJumpList = [0.]; // Placeholder for irrelevant attributes
+              Draggable = true; 
+              Mode = Auto })
+
+    let getInitialOrientation (posList: XYPos list) =
+        if (List.head posList).X = 0.0 then Vertical else Horizontal
+
+    let updatedWires = 
+        model.Wire.Wires
+        |> Map.map (fun wireId wire ->
+            let posList = getVisibleSegments wireId model
+            let segments = convertToSegments wireId wire posList
+            let orientation = getInitialOrientation posList
+            { wire with Segments = segments; InitialOrientation = orientation })
+
+    let updatedBusWireModel = { busWireModel with Wires = updatedWires }
+
+    updatedWires
+    |> Map.fold (fun acc _ wire -> acc + (BusWireRoute.findWireSymbolIntersections updatedBusWireModel wire).Length) 0
+
+
 // T3
 // The number of pairs of symbols that intersect each other. See Tick3 for a related function. Count over all pairs of symbols.
 let getSegmentOrientation (index: int) (initialOrientation: Orientation) : Orientation =
@@ -155,3 +206,16 @@ let countRightAngleIntersections (model: SheetT.Model) : int =
         | _ -> false
     )
     |> Seq.length
+
+// T5
+/// <summary>Counts the number of visible wire right-angles over the whole sheet.</summary>
+/// <param name="model">The sheet model to count for visible right-angles in wires.</param>
+/// <returns>The total number of visible wire right-angle.</returns>
+let countWireRightAngles (model: SheetT.Model) : int =
+    let countRightAngles wireId = 
+        let visibleSegments = getVisibleSegments wireId model
+        max (List.length visibleSegments - 1) 0  // Ensure we don't count negative if there's one segment or none
+
+    model.Wire.Wires
+    |> Map.keys
+    |> Seq.sumBy countRightAngles
