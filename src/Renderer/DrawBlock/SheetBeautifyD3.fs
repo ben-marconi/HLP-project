@@ -67,8 +67,9 @@ let getConnectedSymbols (wireId: ConnectionId) (model: SheetT.Model) =
     
     sourceSymbol, targetSymbol
 
-/// Return a list of portIds and their respective positions given a component at either the start or end of a wire
-let getCompPortNameAndPos (sym: Symbol) (isInputWL: bool) (model: SheetT.Model) : (string * XYPos) list = 
+/// Return a list of portIds and their respective positions given a sym at either the start or end of a wire
+/// Parameter isInputWL is temporary for now and allows us to chose between whether we are using the symbol at the start or end of the wire
+let getSymPortNamesAndPos (sym: Symbol) (isInputWL: bool) (model: SheetT.Model) : (string * XYPos) list = 
     let ports = 
         if isInputWL then sym.Component.OutputPorts             
         else sym.Component.InputPorts
@@ -81,8 +82,8 @@ let getCompPortNameAndPos (sym: Symbol) (isInputWL: bool) (model: SheetT.Model) 
     |> List.map portLabelAndPos 
 
 
-// SymLabel will be determined by the the port names at the symbols on each end of the wire
-// Position will be determined by the port locations on these symbols
+// SymLabel will be determined by a combination of the component and port names at the symbols on each end of the wire
+// Position will be based off the port locations on these symbols
 /// Places a wire label on the sheet 
 let placeWireLabelSymbol (symLabel: string) (position: XYPos) (model: SheetT.Model) : Result<SheetT.Model, string> =
     let symLabel = String.toUpper symLabel
@@ -126,9 +127,10 @@ let placeWire (source: SymbolPort) (target: SymbolPort) (model: SheetT.Model) : 
                 |> Ok
 
 
+// Implement delete wire feature once we can visualise wire placement
 let replaceWireWithLabelOnOutput (wireId: ConnectionId) (sym: Symbol) (model: SheetT.Model) = 
     let wire = model.Wire.Wires.[wireId]
-    let portsList = getCompPortNameAndPos sym true model
+    let portsList = getSymPortNamesAndPos sym true model
     
     let placeWlAtPort (model: SheetT.Model) (portID: string , portPos: XYPos) = 
         let wlPos = { X = portPos.X + 10.0; Y = portPos.Y}
@@ -142,15 +144,6 @@ let replaceWireWithLabelOnOutput (wireId: ConnectionId) (sym: Symbol) (model: Sh
     |> List.fold placeWlAtPort model
         
         
-
-    
-
-// fun model (portID, portPos) ->
-        // let wlPos = { X = portPos.X + 10.0; Y = portPos.Y}
-        // match placeWireLabelSymbol portID wlPos model with
-        // | Ok updatedModel -> updatedModel
-        // | Error errMsg -> printfn "Error: %s" errMsg
-        //                   model)
 // ALTERNATIVE FUNCTION: If we decide that using visible segments is better in testing, this is the alternative to getWireLength
 // working with the visible segment coordinate outputs
 // /// Calculates the length of the visible wire
@@ -190,5 +183,5 @@ let replaceLongWiresWithLabels (model: SheetT.Model) (lengthThreshold: float): S
 
 
 
-// Section C ->> Bit legends /  Symbol rendering / Adjustments
+// Section C ->> Bit legends /  Symbol rendering / Adjustments / repositioning
 // To be implemented when I have a better idea of its current testing performance
