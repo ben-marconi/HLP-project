@@ -22,7 +22,15 @@ open SymbolResizeHelpers
     - Refactoring the code to make it more readable and maintainable.
     - Broke up optmiseSymbol function into smaller functions for better code maintainability.
     - made new helper functions which can be used later.
-    
+
+    1. Made new CalculateHW function to calculate the new height and width of a port. 
+    Can be used to get Hight and Width of any port.
+    2. Took out the code from optimiseSymbol function and made new helper functions for it:
+        - getOtherSymbol -> to get the other symbol from a pair based on the selected symbol.
+        - updateData -> to update the SymConnDataT based on the wire connection to the selected symbol.
+        - alignSym -> to aligns two symbols based on their positions and ensures no overlap.
+        These can be used as global helper functions elsewhere in the code, especially updateData which can be called at other places.
+    3. Renamed a few variables for better understanding.
 
 *)
 
