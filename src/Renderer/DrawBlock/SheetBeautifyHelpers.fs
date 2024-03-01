@@ -12,7 +12,7 @@ open Optics
 open Helpers
 open Symbol
 
-//Helper function from Tick 3
+///Helper function from Tick 3
 let visibleSegments (wId: ConnectionId) (model: SheetT.Model) : XYPos list =
 
     let wire = model.Wire.Wires[wId] // get wire from model
@@ -38,10 +38,13 @@ let visibleSegments (wId: ConnectionId) (model: SheetT.Model) : XYPos list =
     /// if this is possible, otherwise return segVecs unchanged.
     /// Index must be in range 1..segVecs
     let tryCoalesceAboutIndex (segVecs: XYPos list) (index: int) =
-        if segVecs[index] =~ XYPos.zero then
-            segVecs[0 .. index - 2]
-            @ [ segVecs[index - 1] + segVecs[index + 1] ]
-            @ segVecs[index + 2 .. segVecs.Length - 1]
+        if index > 0 && index < segVecs.Length - 1 then
+            if segVecs[index] =~ XYPos.zero then
+                segVecs[0 .. index - 2]
+                @ [ segVecs[index - 1] + segVecs[index + 1] ]
+                @ segVecs[index + 2 .. segVecs.Length - 1]
+            else
+                segVecs
         else
             segVecs
 
@@ -51,6 +54,7 @@ let visibleSegments (wId: ConnectionId) (model: SheetT.Model) : XYPos list =
         (segVecs, [ 1 .. segVecs.Length - 2 ])
         ||> List.fold tryCoalesceAboutIndex)
 
+/// Lens that reads and writes the dimensions of a custom component symbol.
 //B1R, B1W
 let customComponentSymbolDimensions_ =
     Lens.create
@@ -61,6 +65,7 @@ let customComponentSymbolDimensions_ =
             * sym.Component.H)
         (fun (updatedH: float, updatedW: float) (sym: Symbol) -> setCustomCompHW updatedH updatedW sym)
 
+/// Updates symbol position using new XYPos
 //B2W
 let updateSymbolPos (newPos: XYPos) (symbol: Symbol) : Symbol =
     { symbol with
@@ -68,6 +73,7 @@ let updateSymbolPos (newPos: XYPos) (symbol: Symbol) : Symbol =
         Component = { symbol.Component with X = newPos.X; Y = newPos.Y }
         LabelBoundingBox = { symbol.LabelBoundingBox with TopLeft = newPos } }
 
+/// Lens that reads and writes the order of ports for a symbol.
 // B3R, B3W
 let symbolPortOrder_ (edge: Edge) : Lens<Symbol, string list> =
     Lens.create
@@ -79,6 +85,7 @@ let symbolPortOrder_ (edge: Edge) : Lens<Symbol, string list> =
             let updatedPortMapsOrder = Map.add edge newOrder symbol.PortMaps.Order
             { symbol with PortMaps = { symbol.PortMaps with Order = updatedPortMapsOrder } })
 
+/// Lense that reads and writes the reverse state of MUX2 inputs
 // B4R, B4W
 let reverseInputPortsMUX2_ =
     Lens.create
@@ -88,14 +95,15 @@ let reverseInputPortsMUX2_ =
             | None -> failwithf "Reversed Input Ports not found")
         (fun (updatedInputState: bool) (symbol: Symbol) -> { symbol with ReversedInputPorts = Some updatedInputState })
 
+/// Reads the position of on a sheet
 // B5R
-
 let portPos (symbolModel: SymbolT.Model) (portId: string) = getPortLocation None symbolModel portId
 
+/// Reads the BoundingBox of a symbol
 //B6
-
 let getSymbolBoundingBox (symbol: Symbol) = getSymbolBoundingBox symbol
 
+/// Lens that reads/writes a symbol's rotation state from its STransform.
 // B7R, B7W
 let symbolRotationState_ =
     Lens.create
@@ -104,11 +112,14 @@ let symbolRotationState_ =
             { symbol with
                 STransform = { symbol.STransform with Rotation = updatedRotation } })
 
+/// Lens that reads/writes the flip state of a symbol
 // B8R, B8W
 let symbolFlipState_ =
     Lens.create (fun (symbol: Symbol) -> symbol.STransform.Flipped) (fun (updatedFlip: bool) (symbol: Symbol) ->
         { symbol with STransform = { symbol.STransform with Flipped = updatedFlip } })
 
+/// Number of of pairs of symbols that intersect each other
+// T1R
 let countSymbolIntersectsSymbol (sheet: SheetT.Model) : int =
     let boxes =
         mapValues sheet.BoundingBoxes
@@ -118,7 +129,8 @@ let countSymbolIntersectsSymbol (sheet: SheetT.Model) : int =
     |> List.filter (fun ((n1, box1), (n2, box2)) -> (n1 <> n2) && BlockHelpers.overlap2DBox box1 box2)
     |> List.length
 
-//////Fix up/////
+/// Converts list of segment directional vectors to vector of segment start and end points on the sheet
+/// Used in countWireSegmentsIntersectingSymbols to find coordinates of visible segments
 let calculateAbsolutePositions (wire: BusWireT.Wire) (model: SheetT.Model) : list<XYPos * XYPos> =
     let initialPos: XYPos = wire.StartPos
     let visibleSegs: XYPos list = visibleSegments wire.WId model
@@ -131,110 +143,94 @@ let calculateAbsolutePositions (wire: BusWireT.Wire) (model: SheetT.Model) : lis
     |> snd
     |> List.rev
 
+/// Obtains list of symbol bounding boxes from a model
 let getSymbolsBoundingBox (model: SheetT.Model) : BoundingBox list =
     model.Wire.Symbol.Symbols
     |> Map.values
     |> Seq.map getSymbolBoundingBox
     |> Seq.toList
+
+/// Number of visible segments that intersect with one or more symbols in a sheet
+// T2R
 let countWireSegmentsIntersectingSymbols (model: SheetT.Model) : int =
     let symbolsBoundingBoxes = getSymbolsBoundingBox model
 
-    let segmentIntersectsAnySymbol (segmentStart: XYPos) (segmentEnd: XYPos) : bool =
-        symbolsBoundingBoxes
-        |> List.exists (fun bb ->
-            match segmentIntersectsBoundingBox bb segmentStart segmentEnd with
-            | Some _ -> true
-            | None -> false)
-
-    model.Wire.Wires
-    |> Map.fold
-        (fun acc wId wire ->
-            let segmentPositions = calculateAbsolutePositions wire model
-            let intersections =
-                segmentPositions
-                |> List.fold
-                    (fun count (startPos, endPos) ->
-                        if segmentIntersectsAnySymbol startPos endPos then
-                            count + 1
-                        else
-                            count)
-                    0
-
-            acc + intersections)
-        0
-
-//ASegment.Orientation
-let countRightAngleIntersectingSegments (model: SheetT.Model) : int =
-    let allSegments =
-        model.Wire.Wires
-        |> Map.fold (fun acc _ wire -> acc @ calculatePositions wire) []
-
-    let segmentsIntersectAtRightAngles (seg1: ASegment) (seg2: ASegment) =
-        match seg1.Orientation, seg2.Orientation with
-        | Horizontal, Vertical
-        | Vertical, Horizontal ->
-            let horizontalSegment =
-                if seg1.Orientation = Horizontal then
-                    seg1
-                else
-                    seg2
-            let verticalSegment =
-                if seg1.Orientation = Vertical then
-                    seg1
-                else
-                    seg2
-            // Check for overlap in both dimensions
-            overlap1D
-                (horizontalSegment.Start.Y, horizontalSegment.End.Y)
-                (verticalSegment.Start.Y, verticalSegment.End.Y)
-            && overlap1D
-                (horizontalSegment.Start.X, horizontalSegment.End.X)
-                (verticalSegment.Start.X, verticalSegment.End.X)
-        | _ -> false
-
-    // Check for intersections between all unique pairs of segments
-    allSegments
-    |> List.collect (fun seg1 -> allSegments |> List.map (fun seg2 -> seg1, seg2))
-    |> List.filter (fun (seg1, seg2) ->
-        // Ensure we're not comparing a segment with itself
-        seg1.Segment.Index <> seg2.Segment.Index
-        || seg1.Segment.WireId <> seg2.Segment.WireId)
-    |> List.filter (fun (seg1, seg2) -> segmentsIntersectAtRightAngles seg1 seg2)
-    |> List.length
-
-let sumOfUniqueWireSegmentsLengths (model: SheetT.Model) : float =
-    let segmentLength (startPos: XYPos, endPos: XYPos) =
-        let dx = endPos.X - startPos.X
-        let dy = endPos.Y - startPos.Y
-        sqrt (dx * dx + dy * dy)
-
-    let segmentIdentifier (startPos: XYPos, endPos: XYPos) =
-        if startPos.X = endPos.X then
-            sprintf "V%f[%f,%f]" startPos.X (min startPos.Y endPos.Y) (max startPos.Y endPos.Y)
-        else
-            sprintf "H%f[%f,%f]" startPos.Y (min startPos.X endPos.X) (max startPos.X endPos.X)
-
-    let addUniqueSegment (acc: (string * float) list) (segment: (XYPos * XYPos)) =
-        let id = segmentIdentifier segment
-        let len = segmentLength segment
-        if
-            acc
-            |> List.exists (fun (existingId, _) -> existingId = id)
-        then
-            acc
-        else
-            (id, len) :: acc
-
-    let uniqueSegmentsLengths =
+    let sumIncludingPorts =
         model.Wire.Wires
         |> Map.fold
             (fun acc _ wire ->
                 let segmentPositions = calculateAbsolutePositions wire model
-                List.fold addUniqueSegment acc segmentPositions)
-            []
-    uniqueSegmentsLengths |> List.map snd |> List.sum
+                let intersections =
+                    segmentPositions
+                    |> List.fold
+                        (fun count (startPos, endPos) ->
+                            let doesIntersect =
+                                symbolsBoundingBoxes
+                                |> List.exists (fun bb ->
+                                    match segmentIntersectsBoundingBox bb startPos endPos with
+                                    | Some _ -> true
+                                    | None -> false)
+                            if doesIntersect then
+                                count + 1
+                            else
+                                count)
+                        0
 
-let countVisibleWireRightAngles (model: Model) : int =
+                acc + intersections)
+            0
+    sumIncludingPorts - ((model.Wire.Wires).Count * 2)
+
+let segSameNetCheck seg1 seg2 model =
+    let wire1 = model.Wire.Wires |> Map.find seg1.WireId
+    let wire2 = model.Wire.Wires |> Map.find seg2.WireId
+    wire1.OutputPort = wire2.OutputPort
+
+let segOverlapCheck (seg1: ASegment) (seg2: ASegment) =
+    overlap1D (seg1.Start.X, seg1.End.X) (seg2.Start.X, seg2.End.X)
+    && overlap1D (seg1.Start.Y, seg1.End.Y) (seg2.Start.Y, seg2.End.Y)
+
+let segRightAngleCheck (seg1: ASegment) (seg2: ASegment) =
+    match seg1.Orientation, seg2.Orientation with
+    | Horizontal, Vertical -> false
+    | Vertical, Horizontal -> segOverlapCheck seg1 seg2
+    | _ -> false
+
+/// Number of distinct pairs of segments that cross each other at right angles.
+/// Not including 0 length segments/segments on the same net intersecting/segments on same net on top of each other
+// T3R
+let countRightAngleCrossings (model: SheetT.Model) : int =
+    let allSegments =
+        model.Wire.Wires
+        |> Map.values
+        |> Seq.collect (fun wire -> getNonZeroAbsSegments wire |> Seq.toList)
+        |> List.ofSeq
+
+    let rightAngleIntersections =
+        List.allPairs allSegments allSegments
+        |> List.filter (fun (seg1, seg2) -> (segRightAngleCheck seg1 seg2))
+        |> List.filter (fun (seg1, seg2) -> not (segSameNetCheck seg1.Segment seg2.Segment model))
+
+    rightAngleIntersections.Length
+
+/// Total length of all segments in a model, excluding same-net overlap.
+// T4R
+let sumOfUniqueWireSegmentsLengths (model: SheetT.Model) : float =
+    let totalLengthVisibleSeg (wire: Wire) : float =
+        let visibleSegVecs = visibleSegments wire.WId model
+        let totalX =
+            visibleSegVecs
+            |> List.fold (fun acc pos -> acc + pos.X) 0.0
+        let totalY =
+            visibleSegVecs
+            |> List.fold (fun acc pos -> acc + pos.Y) 0.0
+        totalX + totalY
+    model.Wire.Wires
+    |> Map.map (fun _ wire -> totalLengthVisibleSeg wire)
+    |> Map.fold (fun acc _ length -> acc + length) 0.0
+
+/// Number of visible wire right-angles for a whole sheet
+// T5R
+let countVisibleWireRightAngles (model: SheetT.Model) : int =
     let countRightAnglesInWire (wire: Wire) : int =
         let segVecs = visibleSegments wire.WId model
         // Every segment is a right angle so we just count the segments.

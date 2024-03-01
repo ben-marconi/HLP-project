@@ -280,25 +280,34 @@ let getBlock (symbols: Symbol List) : BoundingBox =
     { TopLeft = { X = minX; Y = minY }; W = maxX - minX; H = maxY - minY }
 
 /// Rotate Scale Changes for zge21
-/// Improvements
+/// Improvements for line 303 to 395
+///
+/// XML Comments
+/// comprehensive and do not require any changes
+///
 /// rotatePointAboutBlockCentre:
 /// Eliminated unnecesarry anonymous functions and directly applied transforms instead of using |>.
 /// Simplified the match expression by removing repetitive - centre and + centre operations,
 /// which are implicitly handled by the toCenter and rotated + centre operations. (DRY & DUI)
 /// Changed variable name to centre to improve consistency with the rest of the code base.
+///
 /// flipPointAboutBlockCentre:
 /// Consolidated subtraction operations to make it clearer and reduce repitition of center.X/center.Y
 /// made use of member operation (*) to scale postion (DRY & RSN)
+///
 /// adjustPosForBlockRotation:
-/// Removed unnecessary explicity casting. Comprehensive matching for each rotation and direct modifcation without reduncant
-/// computation.
+/// Removed unnecessary explicity casting. Comprehensive matching for each rotation and direct modifcation without redundant
+/// computation so no further changes required.
+///
 /// adjustPosForBlockFlip:
-/// Removed unnecessary explicity casting. The match cases are straightforward and adhere to NEP
+/// Removed unnecessary explicity casting. The match cases are straightforward and adhere to NEP so no further changes.
+///
 /// rotateSymbolInBlock:
 /// Checked function for all principles. (DRY) Ensured that the process is not unnecessarily complex or repetitive.
 /// (NEP) Checked that all operations are safe and don't potentially lead to exceptions.
-/// (DUI) Each step is clearly documented with identifiers and XML comments, making the code's purpose and operation transparent.
-/// No changes needed
+/// (DUI) Each step is clearly documented with identifiers and XML comments, making the code easily readable.
+/// No changes needed needed.
+///
 /// <summary>HLP 23: AUTHOR Ismagilov - Takes a point Pos, a centre Pos, and a rotation type and returns the point flipped about the centre</summary>
 /// <param name="point"> Original XYPos</param>
 /// <param name="center"> The centre XYPos that the point is rotated about</param>
