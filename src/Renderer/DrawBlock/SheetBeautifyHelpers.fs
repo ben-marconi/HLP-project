@@ -1,12 +1,51 @@
 ﻿module SheetBeautifyHelpers
 
-open CommonTypes.JSONComponent
 open DrawModelType
 open DrawModelType.SymbolT
 open CommonTypes
 open Optics
 open Optics.Optic
 open DrawModelType.BusWireT
+
+//-----------------------------------------------------------------------------------------------
+// visibleSegments is included here as ahelper for info, and because it is needed in project work
+//-----------------------------------------------------------------------------------------------
+
+/// The visible segments of a wire, as a list of vectors, from source end to target end.
+/// Note that in a wire with n segments a zero length (invisible) segment at any index [1..n-2] is allowed
+/// which if present causes the two segments on either side of it to coalesce into a single visible segment.
+/// A wire can have any number of visible segments - even 1
+let visibleSegments (wId: ConnectionId) (model: SheetT.Model): XYPos list =
+
+    let wire = model.Wire.Wires[wId] // get wire from model
+
+    /// helper to match even and off integers in patterns (active pattern)
+    let (|IsEven|IsOdd|) (n: int) = match n % 2 with | 0 -> IsEven | _ -> IsOdd
+
+    /// Convert seg into its XY Vector (from start to end of segment).
+    /// index must be the index of seg in its containing wire.
+    let getSegmentVector (index:int) (seg: BusWireT.Segment) =
+        // The implicit horizontal or vertical direction  of a segment is determined by
+        // its index in the list of wire segments and the wire initial direction
+        match index, wire.InitialOrientation with
+        | IsEven, BusWireT.Vertical | IsOdd, BusWireT.Horizontal -> {X=0.; Y=seg.Length}
+        | IsEven, BusWireT.Horizontal | IsOdd, BusWireT.Vertical -> {X=seg.Length; Y=0.}
+
+    /// Return the list of segment vectors with 3 vectors coalesced into one visible equivalent
+    /// wherever this is possible
+    let rec coalesce (segVecs: XYPos list)  =
+        match List.tryFindIndex (fun segVec -> segVec =~ XYPos.zero) segVecs[1..segVecs.Length-2] with
+        | Some zeroVecIndex ->
+            let index = zeroVecIndex + 1 // base index as it should be on full segVecs
+            segVecs[0..index-2] @
+            [segVecs[index-1] + segVecs[index+1]] @
+            segVecs[index+2..segVecs.Length - 1]
+            |> coalesce
+        | None -> segVecs
+
+    wire.Segments
+    |> List.mapi getSegmentVector
+    |> coalesce
 
 //B1R
 let getCustomSymbolDimension (sym:Symbol) =
@@ -107,6 +146,9 @@ let countWireIntersectsWire (w1:Wire) (w2:Wire) =
     |> List.sum
 
 //T3R
+/// <summary>
+/// counts the number of wire segments that cross each other at right angles across the entire sheet
+/// </summary>
 let countSegmentsCrossingRightAngle (sheet: SheetT.Model) =
     let wireModel = sheet.Wire
     let wires = wireModel.Wires
@@ -125,14 +167,57 @@ let countSegmentsCrossingRightAngle (sheet: SheetT.Model) =
 /// <summary>
 /// Calculate the length of the visible wires on the sheet, excluding wires that overlap from the same net
 /// </summary>
-/// <param name="sheet"></param>
-// let visibleWireLength (sheet:SheetT.Model) =
-//     let wireModel = sheet.Wire
-//     let wires = wireModel.Wires
-//                 |>
-//     wires
+let visibleWireLength (sheet:SheetT.Model) =
+    let wireModel = sheet.Wire
+    wireModel.Wires
+    |> Map.map (fun k _ -> visibleSegments k sheet)
+    |> Map.map (fun k segs ->
+        segs
+        |> List.fold (fun (acc,lastPos) seg ->
+                      if acc = 0. then (0., seg)
+                      elif seg.X = lastPos.X then (acc+abs(seg.Y - lastPos.Y), seg)
+                      elif seg.Y = lastPos.Y then (acc+abs(seg.X - lastPos.X), seg)
+                      else (acc, seg)
+                      ) (0.,XYPos.zero)
+        )
+    |> Map.map (fun k (acc,_) -> acc)
+    |> Map.toList
+    |> List.sumBy snd
 
-let countLabelIntersections (sheet:SheetT.Model) =
+//T5R
+/// <summary>
+/// Number of visible right angles over whole sheet
+/// </summary>
+let countVisibleRightAngles (sheet:SheetT.Model) =
+    let wireModel = sheet.Wire
+    wireModel.Wires
+    |> Map.map (fun k _ -> visibleSegments k sheet)
+    |> Map.map (fun k segs ->
+        segs
+        |> List.fold (fun (acc,lastPos) seg ->
+                      if acc = 0 then (0, seg)
+                      elif seg.X = lastPos.X then (acc, seg)
+                      elif seg.Y = lastPos.Y then (acc, seg)
+                      else (acc+1, seg)
+                      ) (0,XYPos.zero)
+        )
+    |> Map.map (fun k (acc,_) -> acc)
+    |> Map.toList
+    |> List.sumBy snd
+
+//T6R
+/// <summary>
+/// Find all segments that retrace back over the wire they came from and the end segments that retrace so far the next seg is inside a sym
+/// </summary>
+/// <param name="sheet"></param>
+/// <returns> Fst is segments that retrace, snd are end segments that retrace so far the next seg is inside a sym</returns>
+// let retracingWireSegments (sheet:SheetT.Model):(ASegment list * ASegment list) =
+//     let wires = sheet.Wire.Wires
+//                 |> Map.map (fun k v -> BlockHelpers.getAbsSegments v)
+
+
+
+let countWireLabelIntersections (sheet:SheetT.Model) =
     let wires = sheet.Wire.Wires |> Map.toList
     let labels = sheet.Wire.Symbol.Symbols
                  |> Map.filter (fun _ sym -> sym.Component.Type = IOLabel)
@@ -148,6 +233,4 @@ let countLabelIntersections (sheet:SheetT.Model) =
                 | false -> acc
             BlockHelpers.foldOverNonZeroSegs folder 0 (snd w))
     |> List.sum
-
-
 
