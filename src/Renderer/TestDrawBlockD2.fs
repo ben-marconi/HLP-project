@@ -1,4 +1,4 @@
-module TestDrawBlockT2
+module TestDrawBlockD2
 // open modules likely to be used
 open CommonTypes
 open DrawHelpers

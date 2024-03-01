@@ -1,4 +1,4 @@
-# Team work is in the [TestDrawBlockT2.fs](./src/Renderer/TestDrawBlockT2.fs) file
+# Team work is in the [TestDrawBlockD2.fs](./src/Renderer/TestDrawBlockD2.fs) file
 
 ## What I have done
 1. Helper Functions
