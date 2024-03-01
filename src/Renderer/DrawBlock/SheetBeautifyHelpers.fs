@@ -1,12 +1,10 @@
 ﻿module SheetBeautifyHelpers
 open BlockHelpers
 open CommonTypes
-open DrawHelpers
 open DrawModelType
 open DrawModelType.SymbolT
 open DrawModelType.BusWireT
 open DrawModelType.SheetT
-open SheetUpdateHelpers
 open Optics
 open Symbol
 
@@ -54,9 +52,7 @@ let getVisibleSegments (wId: ConnectionId) (model: SheetT.Model): XYPos list =
 // B1
 /// <summary> Read/write the dimensions of a custom component symbol. </summary>
 /// <param name="sym">The symbol to access or modify.</param>
-/// <returns>
-/// A lens for manipulating the symbol's component dimensions.
-/// </returns>
+/// <returns> A lens for manipulating the symbol's component dimensions. </returns>
 let customComponentDimensions_  =
     Lens.create
         (fun (sym : Symbol) ->
@@ -277,10 +273,65 @@ let countRightAngleSegmentIntersections (model: SheetT.Model) : int =
 
 
 // T4
-// Sum of wiring segment length, counting only one when there are N same-net
-// segments overlapping (this is the visible wire length on the sheet). Count over whole
-// sheet
+/// <summary>Calculates the total visible length of wiring segments on the sheet, counting overlaps on the same net as one.</summary>
+/// <param name="model">The sheet model containing wiring segments.</param>
+/// <returns>The total length of visible wiring segments.</returns>
+let totalSegmentLength (model: SheetT.Model) : int =
+    let wires = model.Wire.Wires
 
+    let getSegmentLength (segment: ASegment) : int =
+        int segment.Segment.Length
+
+    let areSegmentsOverlapping (segment1: ASegment) (segment2: ASegment) : bool =
+        match segment1.Orientation, segment2.Orientation with
+        | Horizontal, Horizontal -> overlap1D (segment1.Start.X, segment1.End.X) (segment2.Start.X, segment2.End.X)
+        | Vertical, Vertical -> overlap1D (segment1.Start.Y, segment1.End.Y) (segment2.Start.Y, segment2.End.Y)
+        | _ -> false // No overlap if orientations are different
+
+    let areSegmentsOnSameNet (segment1: ASegment) (segment2: ASegment) : bool =
+        let _, wireId1 = segment1.GetId
+        let _, wireId2 = segment2.GetId
+        let wire1 = Map.find wireId1 wires
+        let wire2 = Map.find wireId2 wires
+        wire1.OutputPort = wire2.OutputPort
+
+    let removeShortestOverlappingSegment segments =
+        segments
+        |> List.fold (fun acc segment ->
+            let overlappingSegment = acc |> List.tryFind (fun otherSegment ->
+                areSegmentsOverlapping segment otherSegment && areSegmentsOnSameNet segment otherSegment)
+            
+            match overlappingSegment with
+            | Some(other) when getSegmentLength segment > getSegmentLength other ->
+                // If the current segment is longer, replace the overlapping one with the current segment
+                List.filter (fun s -> s <> other) acc @ [segment]
+            | None ->
+                // If there is no overlapping segment, or the overlapping segment is longer, add the current segment if it's not already included
+                if not (List.contains segment acc) then acc @ [segment] else acc
+            | _ -> acc // If the overlapping segment is longer, do nothing
+            ) []
+
+    // Flatten all segments into a list
+    let allSegments = 
+        wires 
+        |> Map.values
+        |> Seq.collect (fun wire -> getNonZeroAbsSegments wire)
+        |> Seq.toList
+
+    // Group segments by net and apply deduplication
+    let uniqueSegments = 
+        allSegments
+        |> List.groupBy (fun segment ->
+            let _, wireId = segment.GetId
+            let wire = Map.find wireId wires
+            wire.OutputPort)
+        |> List.collect (fun (_, segmentsOnSameNet) -> removeShortestOverlappingSegment segmentsOnSameNet)
+
+    // Calculate the total length
+    uniqueSegments
+    |> List.sumBy getSegmentLength
+
+    
 
 
 // T5
