@@ -171,7 +171,7 @@ let reSizeSymbol (wModel: BusWireT.Model) (symbolToSize: Symbol) (otherSymbol: S
 
 /// For UI to call ResizeSymbol.
 
-//Changed:Add pipelines
+//rz2621 starts here. Changed:Add pipelines
 let reSizeSymbolTopLevel
     (wModel: BusWireT.Model)
     (symbolToSize: Symbol)
