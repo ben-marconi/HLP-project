@@ -32,7 +32,7 @@ open SymbolResizeHelpers
 // 2 -> OneCompBoundsBothEdges
 // OneCompBoundsBothEdges has been changed to integrate the new findOutermostSymbols function
 // Functional abstraction streamlines the code through the DRY principle
-// The now single pipelines have also been delineated to improve data flow clarity
+// The now single pipelines have also been moved to a single line, improving data flow clarity
 // As mentioned in (1), these changes improve code readability; the calculation steps within the function are more obvious
 
 // 3 -> getScalingFactorAndOffsetCentreGroup
