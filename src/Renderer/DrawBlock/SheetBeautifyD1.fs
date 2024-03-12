@@ -60,6 +60,39 @@ let getSymbolsBoundingBox (model: SheetT.Model) =
     |> List.map (fun (symS, symT, _) -> getSymBoundingBox symS)
 
 /// <summary>
+/// Aligns all singly connected symbols by their target port.
+/// </summary>
+/// <param name="model">The sheet model containing wires and symbols</param>
+/// <returns>Updated model with the moved symbols</returns>
+let alignSingleConnectedSyms (model: SheetT.Model) =
+    let syms = getAllSingleConnectedSymbols model (parallelWires model)
+                //Prefer moving symbols with only one port to have minimal impact on the rest of the sheet
+                //Need to modify the delta function to account for different directions when moving source/target
+                // |> List.map (fun (s,t,w) ->
+                //                 printfn $"{s.PortMaps.Order.Count}, {t.PortMaps.Order.Count}"
+                //                 match (s.PortMaps.Order.Count, t.PortMaps.Order.Count) with
+                //                 | (1,1) -> (s,w)
+                //                 | (_, 1) -> (t,w)
+                //                 | (_, _) -> (s,w)
+                //             )
+    let delta (wire:Wire) =
+        match wire.InitialOrientation with
+        | Horizontal -> {X=0; Y=wire.EndPos.Y - wire.StartPos.Y}
+        | Vertical -> {X=wire.EndPos.X - wire.StartPos.X; Y=0}
+
+    let symbolMap = Optic.get symbols_ model
+    let movedSyms = List.map (fun (s,t,w) -> moveSymbol (delta w) s) syms
+    let symbols' =  (symbolMap, movedSyms)
+                    ||> List.fold (fun s movedSym ->
+                        s |> Map.map (fun _ v ->
+                            match v.Id with
+                            | id when id = movedSym.Id -> movedSym
+                            | _ -> v
+                        ))
+    Optic.set symbols_ symbols' model
+
+
+/// <summary>
 /// Aligns and scales symbols based on the positions and bounding boxes of connected symbols.
 /// </summary>
 /// <param name="model">The sheet model containing wires and symbols.</param>
