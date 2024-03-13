@@ -21,7 +21,7 @@ open SegmentHelpers
 let parallelWires (model: SheetT.Model) =
     Map.values model.Wire.Wires
     |> List.ofSeq
-    |> List.filter (fun wire -> List.length (visibleSegments wire.WId model) = 3)
+    |> List.filter (fun wire -> List.length (visibleSegments wire.WId model) >= 3)
 
 /// <summary>
 /// Gets all single-connected symbols associated with a list of wires in the model.
@@ -89,7 +89,25 @@ let alignSingleConnectedSyms (model: SheetT.Model) =
                             | id when id = movedSym.Id -> movedSym
                             | _ -> v
                         ))
-    Optic.set symbols_ symbols' model
+    printfn "Running alignSingleConnectedSyms"
+    let NewSymbolModel = Optic.set symbols_ symbols' model //Update the model with the new symbol positions
+
+    //Getting Wire map to update to new wire positions based on updated Symbol postions
+    let wireMap = Optic.get wires_ model
+    let movedWires = wireMap |> Map.values |> List.ofSeq
+                    |> List.map (fun w ->
+                    BusWireUpdateHelpers.autoroute NewSymbolModel.Wire w)
+    
+    let wires' =  (wireMap, movedWires)
+                    ||> List.fold (fun w movedWire ->
+                        w |> Map.map (fun _ v ->
+                            match v.WId with
+                            | id when id = movedWire.WId -> movedWire
+                            | _ -> v
+                        ))
+    //Updating the model with the new wire positions
+    Optic.set wires_ wires' NewSymbolModel
+
 
 
 /// <summary>
