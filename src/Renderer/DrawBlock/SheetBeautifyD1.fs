@@ -76,7 +76,7 @@ let alignSingleConnectedSyms (model: SheetT.Model) =
                 //                 | (_, _) -> (s,w)
                 //             )
     let checkXCoor (s1: Symbol) (s2: Symbol) =
-        if s1.Pos.X = s2.Pos.X then
+        if abs(s1.Pos.X - s2.Pos.X) < 20 then
             -100
         else 0
     let delta (wire:Wire)(x: int) =
