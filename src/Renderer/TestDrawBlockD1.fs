@@ -69,7 +69,8 @@ let findSymbolIdByLabel (model: SheetT.Model) (targetLabel: string) : Option<Com
 
 // Placeholder for actual implementation
 let beautify (model : SheetT.Model) : SheetT.Model = 
-    SheetBeautifyD1.alignSingleConnectedSyms model
+    SheetBeautifyD1.sheetAlignScale model
+    // model
 
 /// <summary> Beautifies the given sheet within the model then updates and displays the new sheet. Prints metrics before and after changes. </summary>
 /// <param name="model">The model containing the sheet to be beautified.</param>
@@ -105,8 +106,9 @@ let makeTestCircuit1 (beautify: bool) =
     |> Result.bind (placeSymbol "G1" (GateN (And,2)) (middleOfSheet + { X = 150; Y = -76 }))
     |> Result.bind (placeSymbol "G2" (GateN (Or,2)) (middleOfSheet + { X = 150; Y = 71.5 }))
     |> Result.bind (placeWire (portOf "MUX1" 0) (portOf "MUX2" 1))
+    |> Result.bind (placeWire (portOf "MUX2" 0) (portOf "G1" 1))
     |> Result.bind (placeWire (portOf "G1" 0) (portOf "G2" 1))
-    |> (fun res -> if beautify then Result.map SheetBeautifyD1.alignSingleConnectedSyms res else res)
+    |> (fun res -> if beautify then Result.map SheetBeautifyD1.sheetAlignScale res else res)
     |> getOkOrFail
 
 let makeTestCircuitA2 (beautify: bool) =
@@ -125,7 +127,7 @@ let makeTestCircuitA2 (beautify: bool) =
     |> Result.bind (placeWire (portOf "S1" 0) (portOf "MUX1" 2))
     |> Result.bind (placeWire (portOf "S1" 0) (portOf "MUX2" 1))
     |> Result.bind (placeWire (portOf "S2" 0) (portOf "MUX2" 2))
-    |> (fun res -> if beautify then Result.map SheetBeautifyD1.alignSingleConnectedSyms res else res)
+    |> (fun res -> if beautify then Result.map SheetBeautifyD1.sheetAlignScale res else res)
     |> getOkOrFail
 
 
