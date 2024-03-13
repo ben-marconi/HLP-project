@@ -75,13 +75,17 @@ let alignSingleConnectedSyms (model: SheetT.Model) =
                 //                 | (_, 1) -> (t,w)
                 //                 | (_, _) -> (s,w)
                 //             )
-    let delta (wire:Wire) =
+    let checkXCoor (s1: Symbol) (s2: Symbol) =
+        if s1.Pos.X = s2.Pos.X then
+            -100
+        else 0
+    let delta (wire:Wire)(x: int) =
         match wire.InitialOrientation with
-        | Horizontal -> {X=0; Y=wire.EndPos.Y - wire.StartPos.Y}
+        | Horizontal -> {X=x; Y=wire.EndPos.Y - wire.StartPos.Y}
         | Vertical -> {X=wire.EndPos.X - wire.StartPos.X; Y=0}
 
     let symbolMap = Optic.get symbols_ model
-    let movedSyms = List.map (fun (s,t,w) -> moveSymbol (delta w) s) syms
+    let movedSyms = List.map (fun (s,t,w) -> moveSymbol (checkXCoor s t |> delta w) s) syms
     let symbols' =  (symbolMap, movedSyms)
                     ||> List.fold (fun s movedSym ->
                         s |> Map.map (fun _ v ->
@@ -106,6 +110,8 @@ let alignSingleConnectedSyms (model: SheetT.Model) =
                             | _ -> v
                         ))
     //Updating the model with the new wire positions
+    let intersectingPair = numOfIntersectedSymPairs NewSymbolModel
+    printfn "Number of intersecting pairs: %d" intersectingPair
     Optic.set wires_ wires' NewSymbolModel
 
 
