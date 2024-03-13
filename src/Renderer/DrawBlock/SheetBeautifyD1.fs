@@ -120,7 +120,7 @@ let alignSingleConnectedSyms (model: SheetT.Model) (syms) =
         let sub = if b then -1. else 1.
         match wire.InitialOrientation with
         | Horizontal -> {X=x; Y=wire.EndPos.Y - (wire.StartPos.Y)}
-        | Vertical -> {X=wire.EndPos.X - (wire.StartPos.X * sub); Y=0}
+        | Vertical -> {X=wire.EndPos.X - (wire.StartPos.X); Y=0}
 
     let symbolMap = Optic.get symbols_ model
     let movedSyms = List.map (fun (s,t,w, b) -> moveSymbol (checkXCoor s t b |> delta w b) (if b then s else t)) syms
@@ -173,8 +173,8 @@ let alignSingleConnectedSyms (model: SheetT.Model) (syms) =
                             | _ -> v
                         ))
     //Updating the model with the new wire positions
-    let intersectingPair = numOfIntersectedSymPairs NewSymbolModel
-    printfn "Number of intersecting pairs: %d" intersectingPair
+    // let intersectingPair = numOfIntersectedSymPairs NewSymbolModel
+    // printfn "Number of intersecting pairs: %d" intersectingPair
     Optic.set wires_ wires' NewSymbolModel
 
 
@@ -186,20 +186,20 @@ let alignSingleConnectedSyms (model: SheetT.Model) (syms) =
 let sheetAlignScale (model: SheetT.Model) =
     // let symbols = getAllSymbols model
     let syms = getAllSingleConnectedSymbols model (parallelWires model)
+    printfn "Running SheetAlign %A" <| List.map (fun(s,t,w,b)->(s.Component.Label, t.Component.Label, w.WId,b)) syms
 
     let rec runAlignSingleConnectedSyms model symList count = 
-        printfn "Running SheetAlign %A" <| List.map (fun(s,t,w,b)->(s.Component.Label, t.Component.Label, w.WId,b)) symList
         match symList with
         | [] -> model
         | _ -> 
-            if List.length symList > 0 && count < 5 then
+            if List.length symList > 0 then //&& count < 10
                 let model' = alignSingleConnectedSyms model symList
                 let updatedSymList = getAllSingleConnectedSymbols model' (parallelWires model')
                 runAlignSingleConnectedSyms model' updatedSymList (count + 1)
             else
                 model
-    
-    runAlignSingleConnectedSyms model (getAllSingleConnectedSymbols model (parallelWires model)) 0
+    // 
+    runAlignSingleConnectedSyms model syms 0
     // model
     // printfn "Running SheetAlign %A" <| List.map (fun(s,t,w,b)->(s.Component.Label, t.Component.Label, w.WId,b)) syms
     // alignSingleConnectedSyms model syms
