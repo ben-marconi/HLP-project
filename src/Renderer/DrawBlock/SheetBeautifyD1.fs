@@ -80,6 +80,27 @@ let getSymbolsBoundingBox (model: SheetT.Model) =
     |> List.map (fun (symS, symT, _, _) -> getSymBoundingBox symS)
 
 /// <summary>
+/// Check for overlaps between symbols after they have been moved.
+/// </summary>
+/// <param name="symbols">The symbol that checks for overlapping.</param>
+/// <returns>List of overlaps</returns>
+let detectOverlaps (symbols: Symbol list) : (Symbol * Symbol) list =
+    let boundingBoxes = symbols |> List.map (fun sym -> (sym, getSymBoundingBox sym))
+    let overlaps =
+        boundingBoxes
+        |> List.collect (fun (sym1, box1) ->
+            boundingBoxes
+            |> List.filter (fun (sym2, box2) ->
+                sym1 <> sym2 && overlap2DBox box1 box2)
+            |> List.map (fun (sym2, _) -> (sym1, sym2)))
+    overlaps
+
+
+
+
+
+
+/// <summary>
 /// Aligns all singly connected symbols by their target port.
 /// </summary>
 /// <param name="model">The sheet model containing wires and symbols</param>
