@@ -55,21 +55,6 @@ let getAllSingleConnectedSymbols (model: SheetT.Model) (wires: Wire list) =
     singleConnected
     |> List.map (fun (s, t, w) -> (s, t, w, moveSource sourceSymbols targetSymbols s.Id t.Id))
 
-    // let moveSourceSymbol (symbolList:(Symbol * Symbol * Wire) list) =
-    //     match symbolList with
-    //     | [] -> []  // Base case: Empty list, return empty list
-    //     | (s1, t1, w1)::rest -> 
-    //         let firstTupleResult = (s1, t1, w1, true)
-    //         let rec move (prevT : Symbol, rest) =
-    //             match rest with
-    //             | [] -> []
-    //             | (s, t, w) :: tail ->
-    //                 let newTuple = (s, t, w, prevT.Id <> s.Id)
-    //                 newTuple :: move (t, tail)
-    //         firstTupleResult :: move (t1, rest)
-    //     // | [(s1, t1, w1)] -> [(s1, t1, w1, true)]
-
-    
 
 
 
@@ -131,26 +116,6 @@ let alignSingleConnectedSyms (model: SheetT.Model) (syms) =
                             | id when id = movedSym.Id -> movedSym
                             | _ -> v
                         ))
-    // let rec moveSourceSymbol_ (symbolList) =
-    //     match symbolList with
-    //     | [] -> []  // Base case: Empty list, return empty list
-    //     | (s1, t1, w1)::(s2, t2, w2)::rest -> 
-    //         let firstTupleResult = (s1, t1, w1, true)
-    //         let rec move (prevT, rest) =
-    //             match rest with
-    //             | [] -> []
-    //             | (s, t, w) :: tail ->
-    //                 let newTuple = (s, t, w, prevT <> s)
-    //                 newTuple :: move (t, tail)
-    //         firstTupleResult :: move (t1, rest)
-    //     | [(s1, t1, w1)] -> [(s1, t1, w1, true)]
-    
-    // let testList = [(1, 2, "wire1"); (2, 3, "wire2"); (3, 4, "wire3"); (4, 5, "wire4"); (5, 6, "wire5")]
-    
-    // let result = moveSourceSymbol_ testList
-    
-    // printfn "Result: %A" result
-
 
 
 
@@ -200,20 +165,3 @@ let sheetAlignScale (model: SheetT.Model) =
                 model
     // 
     runAlignSingleConnectedSyms model syms 0
-    // model
-    // printfn "Running SheetAlign %A" <| List.map (fun(s,t,w,b)->(s.Component.Label, t.Component.Label, w.WId,b)) syms
-    // alignSingleConnectedSyms model syms
-        
-    
-
-    // let boundingBoxes = getSymbolsBoundingBox model |> List.choose (fun bb -> Some(bb))
-
-    // let rec groupInPairs list =
-    //     match list with
-    //     | x :: y :: rest -> (x, y) :: groupInPairs rest
-    //     | [x] -> [(x, x)]
-    //     | _ -> []
-
-    // let pairsBoundingBox = groupInPairs boundingBoxes
-    // symbols
-    // |> List.map (fun (symS, symT, _,_) -> updateSymPosInSheet symS.Id symT.Pos)
