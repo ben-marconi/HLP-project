@@ -192,7 +192,7 @@ let sheetAlignScale (model: SheetT.Model) =
         match symList with
         | [] -> model
         | _ -> 
-            if List.length symList > 0 then //&& count < 10
+            if List.length symList > 0 && count < 10 then //
                 let model' = alignSingleConnectedSyms model symList
                 let updatedSymList = getAllSingleConnectedSymbols model' (parallelWires model')
                 runAlignSingleConnectedSyms model' updatedSymList (count + 1)
