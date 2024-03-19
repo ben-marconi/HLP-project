@@ -134,6 +134,7 @@ let makeLabelTest2Circuit muxDistance =
     |> getOkOrFail
     |> beautify
 
+
 //---------------------------------------------------------------------------------------------------------------------------//
 //---------------------------------------------------D3 Custom Asserts-------------------------------------------------------//
 //---------------------------------------------------------------------------------------------------------------------------//
@@ -146,9 +147,16 @@ let failOnLabelWireIntersection (sample:int) model =
     else
         Some $"Wire intersects a wire label in Sample {sample}, at least {intersections} intersections"
 
-let failOnOversizeWires (sample:int) model : string option =
-    failwithf "Not implemented"
-
+let failOnOversizeWires (sample:int) (model:SheetT.Model) : string option =
+    let threshold = 100.0 // Need to find a good threshold
+    let wireLengths = SegmentHelpers.allWireNets model
+                      |> List.collect (fun (_, net) -> SegmentHelpers.getVisualSegsFromNetWires true model net)
+                      |> List.map( fun (startP,endP) -> euclideanDistance startP endP)
+    let maxWireLength = List.max wireLengths
+    if maxWireLength > threshold then
+        Some $"Wire length exceeds threshold in Sample {sample}, max length: {maxWireLength}"
+    else
+        None
 
 
 //--------------------------------------------------------------------------------------------------------------------------//
