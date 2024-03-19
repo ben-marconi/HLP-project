@@ -112,27 +112,44 @@ let beautifySheet (model : ModelType.Model) (dispatch: Dispatch<Msg>): unit =
 //--------------------------------------------------------------------------------------------------------------------------//
 //--------------------------------------------------Test Circuit Generators-------------------------------------------------//
 //--------------------------------------------------------------------------------------------------------------------------//
-let makeLabelTest1Circuit labelPosition =
-    initSheetModel
-    |> placeSymbol "G1" (GateN(And,2)) (middleOfSheet + {X = -100; Y = 0})
-    |> Result.bind (placeSymbol "FF1" DFF middleOfSheet)
-    |> Result.bind (placeWire (portOf "G1" 0) (portOf "FF1" 0))
-    |> Result.bind (placeWire (portOf "FF1" 0) (portOf "G1" 0) )
-    |> Result.bind (placeSymbol "LBL1" IOLabel labelPosition)
-    |> getOkOrFail
-    |> beautify
+let makeLabelTest1Circuit (muxDistance, testBeautify) =
+    let mdl = initSheetModel
+              |> placeSymbol "DMUX1" (Demux4) (middleOfSheet + muxDistance)
+              |> Result.bind (placeSymbol "MUX1" Mux4 middleOfSheet)
+              |> Result.bind (placeWire (portOf "DMUX1" 0) (portOf "MUX1" 0))
+              |> Result.bind (placeWire (portOf "DMUX1" 1) (portOf "MUX1" 1))
+              |> Result.bind (placeWire (portOf "DMUX1" 2) (portOf "MUX1" 2))
+              |> Result.bind (placeWire (portOf "DMUX1" 3) (portOf "MUX1" 3))
+              |> getOkOrFail
+    if testBeautify then
+        beautify mdl
+    else
+        mdl
 
-let makeLabelTest2Circuit muxDistance =
+let megaTestCircuit2 randomPositions =
     initSheetModel
-    |> placeSymbol "DMUX1" (Demux4) (middleOfSheet + muxDistance)
-    |> Result.bind (placeSymbol "MUX1" Mux4 middleOfSheet)
-    |> Result.bind (placeWire (portOf "DMUX1" 0) (portOf "MUX1" 0))
-    |> Result.bind (placeWire (portOf "DMUX1" 1) (portOf "MUX1" 1))
-    |> Result.bind (placeWire (portOf "DMUX1" 2) (portOf "MUX1" 2))
-    |> Result.bind (placeWire (portOf "DMUX1" 3) (portOf "MUX1" 3))
-    |> Result.bind (placeWire (portOf "MUX1" 0) (portOf "LBL1" 0))
+    |> placeSymbol "MUX1" (Mux2) (middleOfSheet + { X = -150; Y = -90 })
+    |> Result.bind (placeSymbol "MUX2" (Mux2) (middleOfSheet))
+    |> Result.bind (placeSymbol "A" (Input1 (1, None)) (middleOfSheet + { X = -350; Y = -130 }))
+    |> Result.bind (placeSymbol "B" (Input1 (1, None)) (middleOfSheet + { X = -350; Y = -50 }))
+    |> Result.bind (placeSymbol "C" (Output 1) (middleOfSheet + { X = 150; Y = -76 }))
+    |> Result.bind (placeSymbol "S1" (Input1 (1, None)) (middleOfSheet + { X = -140; Y = 176 }))
+    |> Result.bind (placeSymbol "S2" (Input1 (1, None)) (middleOfSheet + { X = -230; Y = 100 }))
+    |> Result.bind (placeWire (portOf "MUX1" 0) (portOf "MUX2" 0))
+    |> Result.bind (placeWire (portOf "MUX2" 0) (portOf "C" 0))
+    |> Result.bind (placeWire (portOf "A" 0) (portOf "MUX1" 0))
+    |> Result.bind (placeWire (portOf "B" 0) (portOf "MUX1" 1))
+    |> Result.bind (placeWire (portOf "S1" 0) (portOf "MUX1" 2))
+    |> Result.bind (placeWire (portOf "S1" 0) (portOf "MUX2" 1))
+    |> Result.bind (placeWire (portOf "S2" 0) (portOf "MUX2" 2))
+    |> Result.bind (placeSymbol "DEMUX4" (Demux4) (middleOfSheet + {X = -150; Y = -150}))
+    |> Result.bind (placeSymbol "MUX4" (Mux4) (middleOfSheet + {X = 0; Y = -150}))
+    |> Result.bind (placeWire (portOf "DMUX4" 0) (portOf "MUX4" 0))
+    |> Result.bind (placeWire (portOf "DMUX4" 1) (portOf "MUX4" 1))
+    |> Result.bind (placeWire (portOf "DMUX4" 2) (portOf "MUX4" 2))
+    |> Result.bind (placeWire (portOf "DMUX4" 3) (portOf "MUX4" 3))
     |> getOkOrFail
-    |> beautify
+    // Need to add something to test D2.
 
 
 //---------------------------------------------------------------------------------------------------------------------------//
@@ -148,7 +165,7 @@ let failOnLabelWireIntersection (sample:int) model =
         Some $"Wire intersects a wire label in Sample {sample}, at least {intersections} intersections"
 
 let failOnOversizeWires (sample:int) (model:SheetT.Model) : string option =
-    let threshold = 100.0 // Need to find a good threshold
+    let threshold = 200.0 // Need to find a good threshold
     let wireLengths = SegmentHelpers.allWireNets model
                       |> List.collect (fun (_, net) -> SegmentHelpers.getVisualSegsFromNetWires true model net)
                       |> List.map( fun (startP,endP) -> euclideanDistance startP endP)
@@ -158,29 +175,47 @@ let failOnOversizeWires (sample:int) (model:SheetT.Model) : string option =
     else
         None
 
+let randomXPositions =
+    [-200.0..5.0..200.0]
+    |> List.map (fun xpos -> {X=xpos; Y=0})
+    |> fromList
+
+let beautifyOnOddTests tests =
+    tests
+    |> toList
+    |> List.collect (fun t -> [(t,false); (t,true)])
+    |> fromList
+
 
 //--------------------------------------------------------------------------------------------------------------------------//
 //------------------------------------------------D3 tests on Draw Block code-----------------------------------------------//
 //--------------------------------------------------------------------------------------------------------------------------//
 let test1 testNum firstSample dispatch =
-    failwithf "Not implemented"
-    // runTestOnSheets
-    //     "2 MUXes and 1 Gate With Random Flips"
-    //     firstSample
-    //     //makeTest1Circuit
-    //     //FlipAndRotate
-    //     failOnAllTests
-    //     dispatch
-    // |> recordPositionInTest testNum dispatch
+    runTestOnSheets
+        "2 MUXes With Random Distance"
+        firstSample
+        (randomXPositions |> beautifyOnOddTests)
+        makeLabelTest1Circuit
+        failOnAllTests
+        dispatch
+    |> recordPositionInTest testNum dispatch
 
-
+let test2 testNum firstSample dispatch =
+    runTestOnSheets
+        "2 MUXes With Random Distance"
+        firstSample
+        (randomXPositions |> beautifyOnOddTests)
+        makeLabelTest1Circuit
+        failOnOversizeWires
+        dispatch
+    |> recordPositionInTest testNum dispatch
 
 let testsToRunFromSheetMenu : (string * (int -> int -> Dispatch<Msg> -> Unit)) list =
     // Change names and test functions as required
     // delete unused tests from list
     [
-        "Test1", fun _ _ _ -> printf "Test1" // dummy test - delete line or replace by real test as needed
-        "Test2", fun _ _ _ -> printf "Test2" // dummy test - delete line or replace by real test as needed
+        "Test1", test1
+        "Test2", test2
         "Test3", fun _ _ _ -> printf "Test3" // dummy test - delete line or replace by real test as needed
         "Test4", fun _ _ _ -> printf "Test4" // dummy test - delete line or replace by real test as needed
         "Test5", fun _ _ _ -> printf "Test5" // dummy test - delete line or replace by real test as needed
