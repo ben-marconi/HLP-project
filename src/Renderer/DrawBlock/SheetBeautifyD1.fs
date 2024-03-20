@@ -95,6 +95,43 @@ let detectOverlaps (symbols: Symbol list) : (Symbol * Symbol) list =
             |> List.map (fun (sym2, _) -> (sym1, sym2)))
     overlaps
 
+let resolveOverlaps (overlaps: (Symbol * Symbol) list) : Symbol list -> Symbol list =
+    let moveApart (sym1: Symbol, sym2: Symbol) : Symbol * Symbol =
+        // Calculate current bounding boxes
+        let bb1 = getSymBoundingBox sym1
+        let bb2 = getSymBoundingBox sym2
+
+        // Determine the overlap along X and Y
+        let overlapX = max 0.0 (bb1.TopLeft.X + bb1.W - bb2.TopLeft.X)
+        let overlapY = max 0.0 (bb1.TopLeft.Y + bb1.H - bb2.TopLeft.Y)
+
+        // Determine how much to move the symbols to no longer overlap
+        let moveDistanceX = if overlapX > 0.0 then overlapX + 1.0 else 0.0
+        let moveDistanceY = if overlapY > 0.0 then overlapY + 1.0 else 0.0
+
+        // Check the direction of movement needed based on your layout preference
+        // This example assumes moving sym2 to the right and/or down
+        let newPosX = sym2.Pos.X + moveDistanceX
+        let newPosY = sym2.Pos.Y + moveDistanceY
+
+        // Move sym2 by updating its position
+        let sym2Moved = { sym2 with Pos = { X = newPosX; Y = newPosY } }
+
+        // Return the updated symbols
+        (sym1, sym2Moved)
+
+    let updatedSymbols (symbols) = 
+        overlaps |> List.fold (fun acc (sym1, sym2) ->
+            let (movedSym1, movedSym2) = moveApart(sym1, sym2) 
+            // Update the list of symbols with the new positions
+            // Ensure that the list remains unique and update only the moved symbols
+            acc |> List.map (fun sym ->
+                if sym.Id = movedSym1.Id then movedSym1
+                elif sym.Id = movedSym2.Id then movedSym2
+                else sym)
+        ) symbols  // Start with the original list of symbols
+    updatedSymbols  // Return the updated list of symbols
+    
 
 
 
@@ -139,11 +176,16 @@ let alignSingleConnectedSyms (model: SheetT.Model) (syms) =
                         ))
 
 
+    let overlaps = detectOverlaps (Map.toSeq symbols' |> Seq.map snd |> Seq.toList)
+    let nonOverlappingSymbols = resolveOverlaps overlaps (Map.toSeq symbols' |> Seq.map snd |> Seq.toList)
 
 
 
+    let NewSymbolModel = 
+        Optic.set symbols_ 
+            (Map.ofSeq (List.zip (Map.keys symbols' |> Seq.toList) nonOverlappingSymbols)) 
+            model
 
-    let NewSymbolModel = Optic.set symbols_ symbols' model //Update the model with the new symbol positions
 
     //Getting Wire map to update to new wire positions based on updated Symbol postions
     let wireMap = Optic.get wires_ model
@@ -158,6 +200,8 @@ let alignSingleConnectedSyms (model: SheetT.Model) (syms) =
                             | id when id = movedWire.WId -> movedWire
                             | _ -> v
                         ))
+    
+
     //Updating the model with the new wire positions
     // let intersectingPair = numOfIntersectedSymPairs NewSymbolModel
     // printfn "Number of intersecting pairs: %d" intersectingPair
@@ -181,7 +225,11 @@ let sheetAlignScale (model: SheetT.Model) =
             if List.length symList > 0 && count < 10 then //
                 let model' = alignSingleConnectedSyms model symList
                 let updatedSymList = getAllSingleConnectedSymbols model' (parallelWires model')
-                runAlignSingleConnectedSyms model' updatedSymList (count + 1)
+                let symbolsOnly = List.map (fun (sym, _, _, _) -> sym) updatedSymList
+                let overlaps = detectOverlaps symbolsOnly
+                let resolvedSymList = resolveOverlaps overlaps symbolsOnly
+                let mappedResolvedSymList = List.map2 (fun (sym, _, wire, updated) resolvedSym -> (sym, resolvedSym, wire, updated)) updatedSymList resolvedSymList
+                runAlignSingleConnectedSyms model' mappedResolvedSymList (count + 1)
             else
                 model
     // 
