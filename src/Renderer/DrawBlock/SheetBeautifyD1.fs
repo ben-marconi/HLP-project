@@ -225,11 +225,15 @@ let sheetAlignScale (model: SheetT.Model) =
             if List.length symList > 0 && count < 10 then //
                 let model' = alignSingleConnectedSyms model symList
                 let updatedSymList = getAllSingleConnectedSymbols model' (parallelWires model')
-                let symbolsOnly = List.map (fun (sym, _, _, _) -> sym) updatedSymList
-                let overlaps = detectOverlaps symbolsOnly
-                let resolvedSymList = resolveOverlaps overlaps symbolsOnly
-                let mappedResolvedSymList = List.map2 (fun (sym, _, wire, updated) resolvedSym -> (sym, resolvedSym, wire, updated)) updatedSymList resolvedSymList
-                runAlignSingleConnectedSyms model' mappedResolvedSymList (count + 1)
+                let symbolsOnly1 = List.map (fun (sym, _, _, _) -> sym) updatedSymList
+                let symbolsOnly2 = List.map (fun (_, sym, _, _) -> sym) updatedSymList
+                let overlaps1 = detectOverlaps symbolsOnly1
+                let overlaps2 = detectOverlaps symbolsOnly2
+                let resolvedSymList1 = resolveOverlaps overlaps1 symbolsOnly1
+                let resolvedSymList2 = resolveOverlaps overlaps2 symbolsOnly2
+                let mappedResolvedSymList1 = List.map2 (fun (_, sym, wire, updated) resolvedSym -> (resolvedSym, sym, wire, updated)) updatedSymList resolvedSymList1
+                let mappedResolvedSymList2 = List.map2 (fun (sym, _, wire, updated) resolvedSym -> (sym, resolvedSym, wire, updated)) mappedResolvedSymList1 resolvedSymList2
+                runAlignSingleConnectedSyms model' mappedResolvedSymList2 (count + 1)
             else
                 model
     // 
