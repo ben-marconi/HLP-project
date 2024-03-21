@@ -55,8 +55,13 @@ let getAllSingleConnectedSymbols (model: SheetT.Model) (wires: Wire list) =
 
     singleConnected
     |> List.map (fun (s, t, w) -> (s, t, w, moveSource sourceSymbols targetSymbols s.Id t.Id))
-    |> List.sortBy (fun (_, _, w, _) -> w.StartPos.X)
-    |> List.sortBy (fun (_, _, w, _) -> w.StartPos.Y) 
+    |> List.sortBy (fun (_, _, w, _) -> (w.StartPos.X, w.StartPos.Y))
+    // |> List.sortBy (fun (_, _, w, _) -> w.StartPos.Y)
+    // |>  List.rev
+    // |> function
+    //     | [] -> []
+    //     | (s,t,w,b)::rest -> (s,t,w,false)::rest
+    // |> List.rev
 
 
 
@@ -157,19 +162,18 @@ let alignSingleConnectedSyms (model: SheetT.Model) (syms) =
                 //                 | (_, _) -> (s,w)
                 //             )
     let checkXCoor (s1: Symbol) (s2: Symbol) (b: bool) =
-        // printfn "Distance between %s and %s: %f" s1.Component.Label s2.Component.Label (abs(s1.Pos.X - s2.Pos.X))
-        let sub = if b then 1 else -1
-        if abs(s1.Pos.X - s2.Pos.X) < 50 then
-            (-100*sub)
+        let sub = if b then 1 else 1
+        if abs(s1.Pos.X - s2.Pos.X) < 80 then
+            (-100)
         else 0
     let delta (wire:Wire) (b:bool) (x: int) =
-        let sub = if b then -1. else 1.
+        let sub = if b then 1. else 1.
         match wire.InitialOrientation with
         | Horizontal -> {X=x; Y=wire.EndPos.Y - (wire.StartPos.Y)}
         | Vertical -> {X=wire.EndPos.X - (wire.StartPos.X); Y=0}
 
     let symbolMap = Optic.get symbols_ model
-    let movedSyms = List.map (fun (s,t,w, b) -> moveSymbol (checkXCoor s t b |> delta w b) (if b then s else t)) syms
+    let movedSyms = List.map (fun (s,t,w, b) -> moveSymbol (checkXCoor s t b |> delta w b) (if b then s else s)) syms
     let symbols' =  (symbolMap, movedSyms)
                     ||> List.fold (fun s movedSym ->
                         s |> Map.map (fun _ v ->
@@ -180,7 +184,6 @@ let alignSingleConnectedSyms (model: SheetT.Model) (syms) =
 
 
     let overlaps = detectOverlaps (Map.toSeq symbols' |> Seq.map snd |> Seq.toList)
-    // printfn "Overlaps: %A" overlaps
     let nonOverlappingSymbols = resolveOverlaps overlaps (Map.toSeq symbols' |> Seq.map snd |> Seq.toList)
 
 
@@ -196,7 +199,7 @@ let alignSingleConnectedSyms (model: SheetT.Model) (syms) =
     let movedWires = wireMap |> Map.values |> List.ofSeq
                     |> List.map (fun w ->
                     BusWireUpdateHelpers.autoroute NewSymbolModel.Wire w)
-    
+    let intersectingWires = List.filter (fun w -> (BusWireRoute.findWireSymbolIntersections NewSymbolModel.Wire w).Length > 0) movedWires
     let wires' =  (wireMap, movedWires)
                     ||> List.fold (fun w movedWire ->
                         w |> Map.map (fun _ v ->
@@ -206,7 +209,7 @@ let alignSingleConnectedSyms (model: SheetT.Model) (syms) =
                         ))
     
 
-    //Updating the model with the new wire positions
+    // Updating the model with the new wire positions
     // let intersectingPair = numOfIntersectedSymPairs NewSymbolModel
     // printfn "Number of intersecting pairs: %d" intersectingPair
     Optic.set wires_ wires' NewSymbolModel
@@ -218,7 +221,6 @@ let alignSingleConnectedSyms (model: SheetT.Model) (syms) =
 /// </summary>
 /// <param name="model">The sheet model containing wires and symbols.</param>
 let sheetAlignScale (model: SheetT.Model) =
-    // let symbols = getAllSymbols model
     let syms = getAllSingleConnectedSymbols model (parallelWires model)
     printfn "Running SheetAlign %A" <| List.map (fun(s,t,w,b)->(s.Component.Label, t.Component.Label,b)) syms
 
@@ -240,5 +242,5 @@ let sheetAlignScale (model: SheetT.Model) =
                 runAlignSingleConnectedSyms model' mappedResolvedSymList2 (count + 1)
             else
                 model
-    // 
+    
     runAlignSingleConnectedSyms model syms 0
