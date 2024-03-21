@@ -39,12 +39,7 @@ let getAllSingleConnectedSymbols (model: SheetT.Model) (wires: Wire list) =
         |> List.groupBy (fun sym -> sym)
         |> List.filter (fun (_, symList) -> List.length symList = 1)
         |> List.map (fun (sym, _) -> sym)
-        // |> (fun symList ->
-        //     match symList with
-        //     | [] -> []
-        //     | (s1,t1,w1)::(s2,t2,w2)::rest -> (s1,t1,w1, t1=s1)
 
-        // )
     let singleConnected = getSingleConnectedSymbols sourceTargetSymbols
     let sourceSymbols = List.map (fun (s, _, _) -> s.Id) singleConnected
     let targetSymbols = List.map (fun (_, t, _) -> t.Id) singleConnected
@@ -54,20 +49,8 @@ let getAllSingleConnectedSymbols (model: SheetT.Model) (wires: Wire list) =
 
 
     singleConnected
-    |> List.map (fun (s, t, w) -> (s, t, w, moveSource sourceSymbols targetSymbols s.Id t.Id))
-    |> List.sortBy (fun (_, _, w, _) -> (w.StartPos.X, w.StartPos.Y))
-    // |> List.sortBy (fun (_, _, w, _) -> w.StartPos.Y)
-    // |>  List.rev
-    // |> function
-    //     | [] -> []
-    //     | (s,t,w,b)::rest -> (s,t,w,false)::rest
-    // |> List.rev
-
-
-
-
-    // getSingleConnectedSymbols sourceTargetSymbols
-    // |> moveSourceSymbol
+    // |> List.map (fun (s, t, w) -> (s, t, w, moveSource sourceSymbols targetSymbols s.Id t.Id))
+    // |> List.sortBy (fun (_, _, w, _) -> (w.StartPos.X, w.StartPos.Y))
 
 /// <summary>
 /// Gets all symbols associated with parallel wires in the model.
@@ -85,7 +68,7 @@ let getAllSymbols (model: SheetT.Model) =
 let getSymbolsBoundingBox (model: SheetT.Model) =
     let symbols = getAllSymbols model
     symbols
-    |> List.map (fun (symS, symT, _, _) -> getSymBoundingBox symS)
+    |> List.map (fun (symS, symT, _) -> getSymBoundingBox symS)
 
 /// <summary>
 /// Check for overlaps between symbols after they have been moved.
@@ -161,19 +144,17 @@ let alignSingleConnectedSyms (model: SheetT.Model) (syms) =
                 //                 | (_, 1) -> (t,w)
                 //                 | (_, _) -> (s,w)
                 //             )
-    let checkXCoor (s1: Symbol) (s2: Symbol) (b: bool) =
-        let sub = if b then 1 else 1
+    let checkXCoor (s1: Symbol) (s2: Symbol) =
         if abs(s1.Pos.X - s2.Pos.X) < 80 then
-            (-100)
+            -100.
         else 0
-    let delta (wire:Wire) (b:bool) (x: int) =
-        let sub = if b then 1. else 1.
+    let delta (wire:Wire) (x: float) =
         match wire.InitialOrientation with
         | Horizontal -> {X=x; Y=wire.EndPos.Y - (wire.StartPos.Y)}
         | Vertical -> {X=wire.EndPos.X - (wire.StartPos.X); Y=0}
 
     let symbolMap = Optic.get symbols_ model
-    let movedSyms = List.map (fun (s,t,w, b) -> moveSymbol (checkXCoor s t b |> delta w b) (if b then s else s)) syms
+    let movedSyms = List.map (fun (s,t,w) -> moveSymbol (checkXCoor s t |> delta w) (s)) syms
     let symbols' =  (symbolMap, movedSyms)
                     ||> List.fold (fun s movedSym ->
                         s |> Map.map (fun _ v ->
@@ -238,7 +219,7 @@ let alignSingleConnectedSyms (model: SheetT.Model) (syms) =
 /// <param name="model">The sheet model containing wires and symbols.</param>
 let sheetAlignScale (model: SheetT.Model) =
     let syms = getAllSingleConnectedSymbols model (parallelWires model)
-    printfn "Running SheetAlign %A" <| List.map (fun(s,t,w,b)->(s.Component.Label, t.Component.Label,b)) syms
+    printfn "Running SheetAlign %A" <| List.map (fun(s,t,w)->(s.Component.Label, t.Component.Label)) syms
 
     let rec runAlignSingleConnectedSyms model symList count =
         match symList with
@@ -247,14 +228,14 @@ let sheetAlignScale (model: SheetT.Model) =
             if List.length symList > 0 && count < 10 then //
                 let model' = alignSingleConnectedSyms model symList
                 let updatedSymList = getAllSingleConnectedSymbols model' (parallelWires model')
-                let symbolsOnly1 = List.map (fun (sym, _, _, _) -> sym) updatedSymList
-                let symbolsOnly2 = List.map (fun (_, sym, _, _) -> sym) updatedSymList
+                let symbolsOnly1 = List.map (fun (sym, _, _) -> sym) updatedSymList
+                let symbolsOnly2 = List.map (fun (_, sym, _) -> sym) updatedSymList
                 let overlaps1 = detectOverlaps symbolsOnly1
                 let overlaps2 = detectOverlaps symbolsOnly2
                 let resolvedSymList1 = resolveOverlaps overlaps1 symbolsOnly1
                 let resolvedSymList2 = resolveOverlaps overlaps2 symbolsOnly2
-                let mappedResolvedSymList1 = List.map2 (fun (_, sym, wire, updated) resolvedSym -> (resolvedSym, sym, wire, updated)) updatedSymList resolvedSymList1
-                let mappedResolvedSymList2 = List.map2 (fun (sym, _, wire, updated) resolvedSym -> (sym, resolvedSym, wire, updated)) mappedResolvedSymList1 resolvedSymList2
+                let mappedResolvedSymList1 = List.map2 (fun (_, sym, wire) resolvedSym -> (resolvedSym, sym, wire)) updatedSymList resolvedSymList1
+                let mappedResolvedSymList2 = List.map2 (fun (sym, _, wire) resolvedSym -> (sym, resolvedSym, wire)) mappedResolvedSymList1 resolvedSymList2
                 runAlignSingleConnectedSyms model' mappedResolvedSymList2 (count + 1)
             else
                 model
