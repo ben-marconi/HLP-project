@@ -39,7 +39,7 @@ let getAllSingleConnectedSymbols (model: SheetT.Model) (wires: Wire list) =
         |> List.groupBy (fun sym -> sym)
         |> List.filter (fun (_, symList) -> List.length symList = 1)
         |> List.map (fun (sym, _) -> sym)
-        // |> (fun symList -> 
+        // |> (fun symList ->
         //     match symList with
         //     | [] -> []
         //     | (s1,t1,w1)::(s2,t2,w2)::rest -> (s1,t1,w1, t1=s1)
@@ -48,7 +48,7 @@ let getAllSingleConnectedSymbols (model: SheetT.Model) (wires: Wire list) =
     let singleConnected = getSingleConnectedSymbols sourceTargetSymbols
     let sourceSymbols = List.map (fun (s, _, _) -> s.Id) singleConnected
     let targetSymbols = List.map (fun (_, t, _) -> t.Id) singleConnected
-    
+
     let moveSource sl tl s t=
         (not (List.contains s tl) || List.contains t sl)
 
@@ -215,6 +215,22 @@ let alignSingleConnectedSyms (model: SheetT.Model) (syms) =
     Optic.set wires_ wires' NewSymbolModel
 
 
+// let scaleCustomCompAlign model compId =
+//     let sym = Optic.get symbols_ model
+//               |> Map.tryFind compId
+//               |> Option.defaultValue (failwith "Symbol not found")
+//     let wires = BusWireUpdateHelpers.getConnectedWires compId model
+//                 |> List.filter (fun w -> numOfVisRightAngles )
+//
+//
+// let scaleCustomCompsAlign (model: SheetT.Model) =
+//     let customSyms = Optic.get symbols_ model
+//                      |> Map.filter (fun _ s  -> match s.Component.Type with
+//                                                 | Custom _ -> true
+//                                                 | _ -> false)
+//                      |> Map.filter (fun _ s -> s.Component.InputPorts > 1)
+//                      |> Map.filter (fun k s -> BusWireUpdateHelpers.getConnectedWires k model |> List.length > 1)
+//                      |> Map.toList
 
 /// <summary>
 /// Aligns and scales symbols based on the positions and bounding boxes of connected symbols.
@@ -224,10 +240,10 @@ let sheetAlignScale (model: SheetT.Model) =
     let syms = getAllSingleConnectedSymbols model (parallelWires model)
     printfn "Running SheetAlign %A" <| List.map (fun(s,t,w,b)->(s.Component.Label, t.Component.Label,b)) syms
 
-    let rec runAlignSingleConnectedSyms model symList count = 
+    let rec runAlignSingleConnectedSyms model symList count =
         match symList with
         | [] -> model
-        | _ -> 
+        | _ ->
             if List.length symList > 0 && count < 10 then //
                 let model' = alignSingleConnectedSyms model symList
                 let updatedSymList = getAllSingleConnectedSymbols model' (parallelWires model')
