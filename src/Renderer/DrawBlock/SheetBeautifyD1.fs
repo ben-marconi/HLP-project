@@ -22,6 +22,7 @@ let parallelWires (model: SheetT.Model) =
     Map.values model.Wire.Wires
     |> List.ofSeq
     |> List.filter (fun wire -> List.length (visibleSegments wire.WId model) >= 3)
+    |> List.sortBy (fun wire -> wire.StartPos.X)
 
 /// <summary>
 /// Gets all single-connected symbols associated with a list of wires in the model.
@@ -54,6 +55,8 @@ let getAllSingleConnectedSymbols (model: SheetT.Model) (wires: Wire list) =
 
     singleConnected
     |> List.map (fun (s, t, w) -> (s, t, w, moveSource sourceSymbols targetSymbols s.Id t.Id))
+    |> List.sortBy (fun (_, _, w, _) -> w.StartPos.X)
+    |> List.sortBy (fun (_, _, w, _) -> w.StartPos.Y) 
 
 
 
@@ -156,7 +159,7 @@ let alignSingleConnectedSyms (model: SheetT.Model) (syms) =
     let checkXCoor (s1: Symbol) (s2: Symbol) (b: bool) =
         // printfn "Distance between %s and %s: %f" s1.Component.Label s2.Component.Label (abs(s1.Pos.X - s2.Pos.X))
         let sub = if b then 1 else -1
-        if abs(s1.Pos.X - s2.Pos.X) < 60 then
+        if abs(s1.Pos.X - s2.Pos.X) < 50 then
             (-100*sub)
         else 0
     let delta (wire:Wire) (b:bool) (x: int) =
@@ -177,6 +180,7 @@ let alignSingleConnectedSyms (model: SheetT.Model) (syms) =
 
 
     let overlaps = detectOverlaps (Map.toSeq symbols' |> Seq.map snd |> Seq.toList)
+    // printfn "Overlaps: %A" overlaps
     let nonOverlappingSymbols = resolveOverlaps overlaps (Map.toSeq symbols' |> Seq.map snd |> Seq.toList)
 
 
@@ -216,7 +220,7 @@ let alignSingleConnectedSyms (model: SheetT.Model) (syms) =
 let sheetAlignScale (model: SheetT.Model) =
     // let symbols = getAllSymbols model
     let syms = getAllSingleConnectedSymbols model (parallelWires model)
-    printfn "Running SheetAlign %A" <| List.map (fun(s,t,w,b)->(s.Component.Label, t.Component.Label, w.WId,b)) syms
+    printfn "Running SheetAlign %A" <| List.map (fun(s,t,w,b)->(s.Component.Label, t.Component.Label,b)) syms
 
     let rec runAlignSingleConnectedSyms model symList count = 
         match symList with
